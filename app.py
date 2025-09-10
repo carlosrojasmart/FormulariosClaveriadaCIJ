@@ -34,7 +34,7 @@ st.markdown(
     [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
 
     :root{
-      --bg:#141e2e;           /* fondo principal */
+      --bg:#141d2c;           /* fondo principal */
       --card:#1b2a44;         /* tarjetas */
       --border:#243656;       /* bordes */
       --text:#e7eefc;         /* texto principal */
