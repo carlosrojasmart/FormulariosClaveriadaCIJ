@@ -1,22 +1,23 @@
-# utils.py
 from pathlib import Path
 import pandas as pd
 
 PARTICIPANTES_COLS = [
     "timestamp","es_mayor_edad","tipo_documento_participante","documento_participante","nombre_completo",
-    "como_te_gusta_que_te_digan","telefono_celular","correo","fecha_nacimiento","eps","restricciones_alimentarias",
-    "salud_mental","region","obra_institucion","proceso_juvenil","experiencia_significativa","intereses_personales",
-    "dato_freak","ola_mas_grande","pregunta_para_conectar","exp_servicio_rank","exp_peregrinaje_rank",
-    "exp_cultura_arte_rank","exp_espiritualidad_rank","exp_vocacion_rank","exp_incidencia_politica_rank",
-    "perfil_cercania","motivo_experiencia_top","preguntas_frecuentes","ha_vivido_acompanamiento",
-    "quiere_acompanamiento_espiritual","quiere_acompanamiento_psicologico","quiere_acompanamiento_escucha",
-    "conoce_rji","tipo_documento_acudiente","documento_acudiente","nombre_acudiente","correo_acudiente","telefono_acudiente"
+    "como_te_gusta_que_te_digan","telefono_celular","correo","fecha_nacimiento","edad_aprox","eps",
+    "restricciones_alimentarias","salud_mental","region","obra_institucion","proceso_juvenil",
+    "intereses_personales","experiencia_significativa","dato_freak","pregunta_para_conectar",
+    "exp_servicio_rank","exp_peregrinaje_rank","exp_cultura_arte_rank","exp_espiritualidad_rank","exp_vocacion_rank","exp_incidencia_politica_rank",
+    "experiencia_top_calculada","perfil_cercania","motivo_experiencia_top","preguntas_frecuentes",
+    "ha_vivido_acompanamiento","quiere_acompanamiento_espiritual","quiere_acompanamiento_psicologico","quiere_acompanamiento_escucha",
+    "conoce_rji","tipo_documento_acudiente","documento_acudiente","nombre_acudiente","correo_acudiente","telefono_acudiente",
+    "acepta_tratamiento_datos"
 ]
 
 ACOMPANANTES_COLS = [
     "timestamp","tipo_documento_acompanante","documento_acompanante","nombre_acompanante","correo_acompanante",
     "telefono_acompanante","organizacion","region","rol_en_organizacion","trae_varios_jovenes",
-    "experiencia_en_la_que_participa_como_acompanante","archivo_lista_menores_url","lista_documentos_menores_texto"
+    "experiencia_en_la_que_participa_como_acompanante","ciudad_origen","hora_llegada_medellin",
+    "archivo_lista_menores_url","lista_documentos_menores_texto"
 ]
 
 UNIFICADO_COLS = [
@@ -26,7 +27,6 @@ UNIFICADO_COLS = [
 ]
 
 def ensure_excel_with_sheets(path: Path):
-    """Crea el Excel y las hojas necesarias si no existen."""
     path = Path(path)
     if not path.exists():
         with pd.ExcelWriter(path, engine="xlsxwriter") as writer:
@@ -34,7 +34,6 @@ def ensure_excel_with_sheets(path: Path):
             pd.DataFrame(columns=ACOMPANANTES_COLS).to_excel(writer, sheet_name="ACOMPANANTES", index=False)
             pd.DataFrame(columns=UNIFICADO_COLS).to_excel(writer, sheet_name="UNIFICADO", index=False)
     else:
-        # Garantiza que existan las hojas
         xl = pd.ExcelFile(path)
         with pd.ExcelWriter(path, engine="openpyxl", mode="a", if_sheet_exists="overlay") as writer:
             if "PARTICIPANTES" not in xl.sheet_names:
@@ -45,11 +44,10 @@ def ensure_excel_with_sheets(path: Path):
                 pd.DataFrame(columns=UNIFICADO_COLS).to_excel(writer, sheet_name="UNIFICADO", index=False)
 
 def append_row(path: Path, sheet: str, row: list, expected_cols: list):
-    """Añade una fila a una hoja, alineando columnas por nombre si hace falta."""
     path = Path(path)
     df = pd.read_excel(path, sheet_name=sheet)
     if list(df.columns) != expected_cols:
-        # crea columnas faltantes y reordena
+        # añade columnas faltantes y reordena
         for c in expected_cols:
             if c not in df.columns:
                 df[c] = ""
@@ -70,7 +68,6 @@ def _docs_from_text(txt: str):
     return set(p.strip().replace(" ","") for p in parts if p.strip())
 
 def update_unificado(path: Path) -> int:
-    """Genera/actualiza la hoja UNIFICADO cruzando participantes y acompañantes."""
     path = Path(path)
     p = pd.read_excel(path, sheet_name="PARTICIPANTES")
     a = pd.read_excel(path, sheet_name="ACOMPANANTES")
@@ -79,7 +76,7 @@ def update_unificado(path: Path) -> int:
     acomp_map = {}
     for _, row in a.iterrows():
         docA = _normalize_doc(row.get("documento_acompanante",""))
-        if not docA: 
+        if not docA:
             continue
         acomp_map[docA] = {
             "nombre": row.get("nombre_acompanante",""),
