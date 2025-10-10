@@ -68,9 +68,6 @@ st.markdown(
     .stage-progress-bar span{ display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent3)); border-radius:inherit; transition:width .35s ease; }
     .stage-progress-sub{ color:var(--muted); font-size:.92rem; margin-top:.25rem; }
     .motivacion-box{ background:rgba(255,156,42,.12); border:1px solid rgba(255,156,42,.35); color:var(--accent); padding:.75rem 1rem; border-radius:12px; font-weight:600; }
-    .ranking-preview{ display:grid; gap:.4rem; margin:.75rem 0 1rem; }
-    .ranking-preview-item{ display:flex; align-items:center; gap:.75rem; background:rgba(156,197,255,.12); border:1px solid rgba(156,197,255,.3); padding:.45rem .75rem; border-radius:12px; color:var(--text); font-weight:600; }
-    .ranking-preview-item span{ display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:50%; background:rgba(255,156,42,.2); border:1px solid rgba(255,156,42,.45); color:var(--accent); font-weight:700; }
     .perfil-slider-labels{ display:flex; justify-content:space-between; color:var(--muted); font-weight:600; margin-top:.35rem; }
     /* Inputs */
     label, .stMarkdown, .stCaption, .stRadio, .stText, .stSelectbox, .stDateInput, .stTimeInput{
@@ -434,17 +431,11 @@ with tab1:
                 from streamlit_sortables import sort_items  # type: ignore
                 st.caption("Arrastra para ordenar según tu interés (arriba = más interés)")
                 current_order = st.session_state.part_exp_order
-                numbered_items = [f"{idx + 1}. {exp}" for idx, exp in enumerate(current_order)]
-                sorted_items = sort_items(numbered_items, direction="vertical", key="exp_sort")
-
-                cleaned_order = []
-                for item in sorted_items:
-                    _, sep, label = item.partition(". ")
-                    cleaned_order.append(label if sep else item)
+                sorted_items = sort_items(current_order, direction="vertical", key="exp_sort")
 
                 # Mantén el orden para la siguiente interacción y como resultado final
-                st.session_state.part_exp_order = cleaned_order
-                order = cleaned_order
+                st.session_state.part_exp_order = sorted_items
+                order = sorted_items
             except Exception:
                 st.caption("Selecciona en orden de interés (sin repetir).")
 
@@ -459,13 +450,6 @@ with tab1:
 
                 order = ranker(experiencias)
                 st.session_state.part_exp_order = order
-
-            ranks = {exp: (order.index(exp) + 1) for exp in experiencias}
-
-            preview_html = "<div class='ranking-preview'>" + "".join(
-                f"<div class='ranking-preview-item'><span>{i + 1}</span>{exp}</div>" for i, exp in enumerate(order)
-            ) + "</div>"
-            st.markdown(preview_html, unsafe_allow_html=True)
 
             st.markdown("#### Perfil de cercanía con la priorizada")
             st.slider(
