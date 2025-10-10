@@ -9,7 +9,7 @@ PARTICIPANTES_COLS = [
     "exp_servicio_rank","exp_peregrinaje_rank","exp_cultura_arte_rank","exp_espiritualidad_rank","exp_vocacion_rank","exp_incidencia_politica_rank",
     "experiencia_top_calculada","perfil_cercania","motivo_experiencia_top","preguntas_frecuentes",
     "ha_vivido_acompanamiento","acompanamiento_parcerxs","acompanamiento_familia","acompanamiento_mentoria",
-    "acompanamiento_espiritual","acompanamiento_emocional",
+    "acompanamiento_espiritual","acompanamiento_emocional","acompanamiento_red_comunidad",
     "conoce_rji","tipo_documento_acudiente","documento_acudiente","nombre_acudiente","correo_acudiente","telefono_acudiente",
     "acepta_tratamiento_datos"
 ]

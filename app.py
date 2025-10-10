@@ -62,6 +62,15 @@ st.markdown(
     .stTabs [aria-selected="true"]{
       border:1px solid var(--accent); background:#233658; color:var(--accent);
     }
+    .stage-progress{ margin:1.25rem 0 .5rem; }
+    .stage-progress-label{ display:flex; justify-content:space-between; font-weight:600; color:var(--text); margin-bottom:.35rem; }
+    .stage-progress-bar{ background:rgba(255,255,255,.12); border-radius:999px; height:16px; overflow:hidden; border:1px solid var(--border); }
+    .stage-progress-bar span{ display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent3)); border-radius:inherit; transition:width .35s ease; }
+    .stage-progress-sub{ color:var(--muted); font-size:.92rem; margin-top:.25rem; }
+    .motivacion-box{ background:rgba(255,156,42,.12); border:1px solid rgba(255,156,42,.35); color:var(--accent); padding:.75rem 1rem; border-radius:12px; font-weight:600; }
+    .ranking-guide{ display:flex; justify-content:space-between; gap:.5rem; margin:0 0 1rem; }
+    .ranking-guide span{ flex:1; text-align:center; background:rgba(156,197,255,.14); border:1px solid rgba(156,197,255,.35); padding:.45rem 0; border-radius:10px; font-weight:600; color:var(--text); }
+    .perfil-slider-labels{ display:flex; justify-content:space-between; color:var(--muted); font-weight:600; margin-top:.35rem; }
     /* Inputs */
     label, .stMarkdown, .stCaption, .stRadio, .stText, .stSelectbox, .stDateInput, .stTimeInput{
       color:var(--text) !important;
@@ -193,6 +202,7 @@ PARTICIPANT_DEFAULTS = {
     "part_acomp_mentoria": False,
     "part_acomp_espiritual": False,
     "part_acomp_emocional": False,
+    "part_acomp_red_comunidad": False,
     "part_conoce_rji": "",
     "part_acepta_datos": False,
     "part_perfil_slider": 1,
@@ -218,7 +228,7 @@ def _participant_stage_fields(stage: int):
         3: [
             "part_motivo", "part_preguntas_frec", "part_acomp_viv",
             "part_acomp_parcerxs", "part_acomp_familia", "part_acomp_mentoria",
-            "part_acomp_espiritual", "part_acomp_emocional", "part_conoce_rji",
+            "part_acomp_espiritual", "part_acomp_emocional", "part_acomp_red_comunidad", "part_conoce_rji",
             "part_acepta_datos",
         ],
     }
@@ -255,10 +265,10 @@ def _value_is_filled(val, key: str) -> bool:
 def _stage_progress(stage: int):
     fields = _participant_stage_fields(stage)
     if not fields:
-        return 0.0, 0
+        return 0.0, 0, 0, 0
     answered = sum(1 for key in fields if _value_is_filled(st.session_state.get(key), key))
     total = len(fields)
-    return answered / total, int(round((answered / total) * 100))
+    return answered / total, int(round((answered / total) * 100)), answered, total
 
 
 def _goto_participant_stage(stage: int):
@@ -282,10 +292,24 @@ with tab1:
     }
 
     st.markdown(f"### {stage_titles.get(stage, '')}")
-    progreso, porcentaje = _stage_progress(stage)
-    st.progress(progreso)
-    st.caption(f"Has completado aproximadamente el {porcentaje}% de esta etapa.")
-    st.info(motivaciones.get(stage, ""))
+    progreso, porcentaje, respondidas, total = _stage_progress(stage)
+    barra = max(porcentaje, 4) if porcentaje > 0 else 4
+    st.markdown(
+        f"""
+        <div class=\"stage-progress\">
+            <div class=\"stage-progress-label\">
+                <span>Avance de la etapa</span>
+                <span>{porcentaje}%</span>
+            </div>
+            <div class=\"stage-progress-bar\">
+                <span style=\"width:{barra}%\"></span>
+            </div>
+        </div>
+        <div class=\"stage-progress-sub\">Has respondido {respondidas} de {total} preguntas clave en esta sección.</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(f"<div class='motivacion-box'>{motivaciones.get(stage, '')}</div>", unsafe_allow_html=True)
 
     if stage > 1:
         st.button("⬅️ Volver a la etapa anterior", on_click=lambda: _goto_participant_stage(stage - 1))
@@ -403,6 +427,19 @@ with tab1:
     else:  # stage 3
         with st.form("form_participante_stage3", clear_on_submit=False):
             st.subheader("Así ordenas tus experiencias")
+            st.markdown(
+                """
+                <div class=\"ranking-guide\">
+                    <span>1</span>
+                    <span>2</span>
+                    <span>3</span>
+                    <span>4</span>
+                    <span>5</span>
+                    <span>6</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             try:
                 from streamlit_sortables import sort_items  # type: ignore
                 st.caption("Arrastra para ordenar según tu interés (arriba = más interés)")
@@ -422,9 +459,6 @@ with tab1:
                 order = ranker(experiencias)
 
             ranks = {exp: (order.index(exp) + 1) for exp in experiencias}
-            st.markdown("#### Tu ranking actual")
-            for exp in order:
-                st.markdown(f"- **Nivel {ranks[exp]}:** {exp}")
 
             st.markdown("#### Perfil de cercanía con la priorizada")
             st.slider(
@@ -435,16 +469,17 @@ with tab1:
                 key="part_perfil_slider"
             )
             perfil_map = {1: "Curioso", 2: "Explorador", 3: "Protagonista"}
-            estrellas = {1: "⭐", 2: "⭐⭐", 3: "⭐⭐⭐"}
             seleccionado = st.session_state.get("part_perfil_slider", 1)
-            badges = []
-            for value, label in perfil_map.items():
-                icon = estrellas[value]
-                if value == seleccionado:
-                    badges.append(f"**{icon} {label}**")
-                else:
-                    badges.append(f"{icon} {label}")
-            st.markdown(" | ".join(badges))
+            st.markdown(
+                """
+                <div class=\"perfil-slider-labels\">
+                    <span>⭐ Curioso</span>
+                    <span>⭐⭐ Explorador</span>
+                    <span>⭐⭐⭐ Protagonista</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             perfil_cerc = perfil_map[seleccionado]
 
             st.text_area(
@@ -463,25 +498,26 @@ with tab1:
                 "Cuéntanos más de tu experiencia de acompañamiento",
                 key="part_acomp_viv"
             )
-            st.caption("Marca los acompañamientos con los que cuentas o te gustaría contar.")
+            st.caption("Marca los acompañamientos con los que cuentas o quisieras fortalecer.")
             col_a, col_b, col_c = st.columns(3)
-            col_d, col_e = st.columns(2)
-            col_a.checkbox("Parcerxs que te sostienen", key="part_acomp_parcerxs")
-            col_b.checkbox("Familia que te banca", key="part_acomp_familia")
-            col_c.checkbox("Mentor/a o profe cómplice", key="part_acomp_mentoria")
-            col_d.checkbox("Tribu espiritual", key="part_acomp_espiritual")
-            col_e.checkbox("Red emocional / escucha", key="part_acomp_emocional")
+            col_d, col_e, col_f = st.columns(3)
+            col_a.checkbox("Amistades", key="part_acomp_parcerxs")
+            col_b.checkbox("Familia", key="part_acomp_familia")
+            col_c.checkbox("Mentoría o tutoría", key="part_acomp_mentoria")
+            col_d.checkbox("Acompañamiento espiritual", key="part_acomp_espiritual")
+            col_e.checkbox("Escucha activa / apoyo emocional", key="part_acomp_emocional")
+            col_f.checkbox("Red comunitaria o institucional", key="part_acomp_red_comunidad")
 
-            conoce_opciones = ["", "Sí", "No", "Más o menos"]
-            conoce_idx = conoce_opciones.index(st.session_state.get("part_conoce_rji", ""))
+            conoce_opciones = ["Sí", "No", "Más o menos"]
+            conoce_val = st.session_state.get("part_conoce_rji", "")
+            conoce_idx = conoce_opciones.index(conoce_val) if conoce_val in conoce_opciones else None
             conoce_rji = st.radio(
                 "¿Conoces qué es la RJI?",
                 conoce_opciones,
                 horizontal=True,
                 index=conoce_idx,
-                format_func=lambda opt: "Cuéntanoslo" if opt == "" else opt,
             )
-            st.session_state.part_conoce_rji = conoce_rji
+            st.session_state.part_conoce_rji = conoce_rji or ""
 
             st.markdown("---")
             st.caption("Aviso de privacidad: la información recolectada es sensible y se utilizará únicamente para construir tu perfil en la Claveriada RJI y para la logística del encuentro. No será compartida con terceros.")
@@ -549,6 +585,7 @@ with tab1:
                         "TRUE" if st.session_state.get("part_acomp_mentoria") else "FALSE",
                         "TRUE" if st.session_state.get("part_acomp_espiritual") else "FALSE",
                         "TRUE" if st.session_state.get("part_acomp_emocional") else "FALSE",
+                        "TRUE" if st.session_state.get("part_acomp_red_comunidad") else "FALSE",
                         conoce_map.get(st.session_state.get("part_conoce_rji"), ""),
                         st.session_state.get("part_tipo_doc_a", ""),
                         doc_a.strip(),
