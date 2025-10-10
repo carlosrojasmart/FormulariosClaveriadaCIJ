@@ -8,15 +8,17 @@ PARTICIPANTES_COLS = [
     "intereses_personales","experiencia_significativa","dato_freak","pregunta_para_conectar",
     "exp_servicio_rank","exp_peregrinaje_rank","exp_cultura_arte_rank","exp_espiritualidad_rank","exp_vocacion_rank","exp_incidencia_politica_rank",
     "experiencia_top_calculada","perfil_cercania","motivo_experiencia_top","preguntas_frecuentes",
-    "ha_vivido_acompanamiento","quiere_acompanamiento_espiritual","quiere_acompanamiento_psicologico","quiere_acompanamiento_escucha",
+    "ha_vivido_acompanamiento","acompanamiento_parcerxs","acompanamiento_familia","acompanamiento_mentoria",
+    "acompanamiento_espiritual","acompanamiento_emocional",
     "conoce_rji","tipo_documento_acudiente","documento_acudiente","nombre_acudiente","correo_acudiente","telefono_acudiente",
     "acepta_tratamiento_datos"
 ]
 
 ACOMPANANTES_COLS = [
     "timestamp","tipo_documento_acompanante","documento_acompanante","nombre_acompanante","correo_acompanante",
-    "telefono_acompanante","organizacion","region","rol_en_organizacion","trae_varios_jovenes",
-    "experiencia_en_la_que_participa_como_acompanante","ciudad_origen","hora_llegada_medellin",
+    "telefono_acompanante","organizacion","region","rol_en_organizacion","delegacion_que_acompana",
+    "tamano_delegacion","medio_de_viaje","trae_varios_jovenes","experiencias_niveladas",
+    "ciudad_origen","hora_llegada_medellin",
     "archivo_lista_menores_url","lista_documentos_menores_texto"
 ]
 
