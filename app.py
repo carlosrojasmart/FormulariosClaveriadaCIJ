@@ -611,22 +611,6 @@ with tab1:
 
             avanzar = st.form_submit_button("Avanzar a intereses", use_container_width=True)
             if avanzar:
-                st.session_state.part_doc_p = _clean_digits(doc_num)
-                st.session_state.part_nombres = _clean_string(nombres)
-                st.session_state.part_apellidos = _clean_string(apellidos)
-                st.session_state.part_apodo = _clean_string(apodo)
-                st.session_state.part_tel = _clean_string(telefono)
-                st.session_state.part_correo = _clean_string(correo)
-                st.session_state.part_direccion = _clean_string(direccion)
-                st.session_state.part_eps = _clean_string(eps)
-                st.session_state.part_rest_alim = _clean_string(rest_alim)
-                st.session_state.part_salud_mental = salud.strip() if isinstance(salud, str) else ""
-                st.session_state.part_proceso = _clean_string(proceso)
-                st.session_state.part_doc_a = _clean_digits(doc_contacto)
-                st.session_state.part_nom_a = _clean_string(nom_contacto)
-                st.session_state.part_ape_a = _clean_string(ape_contacto)
-                st.session_state.part_tel_a = _clean_string(tel_contacto)
-                st.session_state.part_correo_a = _clean_string(correo_contacto)
                 _goto_participant_stage(2)
 
     elif stage == 2:
@@ -737,19 +721,6 @@ with tab1:
             col_f.checkbox("Red comunitaria o institucional", key="part_acomp_red_comunidad")
             st.checkbox("Ninguna por ahora", key="part_acomp_ninguna")
 
-            if st.session_state.get("part_acomp_ninguna"):
-                for acomp_key in ["part_acomp_familia", "part_acomp_amigos", "part_acomp_escucha", "part_acomp_mentoria", "part_acomp_espiritual", "part_acomp_red_comunidad"]:
-                    st.session_state[acomp_key] = False
-            elif any([
-                st.session_state.get("part_acomp_familia"),
-                st.session_state.get("part_acomp_amigos"),
-                st.session_state.get("part_acomp_escucha"),
-                st.session_state.get("part_acomp_mentoria"),
-                st.session_state.get("part_acomp_espiritual"),
-                st.session_state.get("part_acomp_red_comunidad"),
-            ]):
-                st.session_state.part_acomp_ninguna = False
-
             conoce_opciones = ["Sí", "No", "Más o menos"]
             conoce_val = st.session_state.get("part_conoce_rji", "")
             conoce_idx = conoce_opciones.index(conoce_val) if conoce_val in conoce_opciones else None
@@ -781,9 +752,19 @@ with tab1:
                 _goto_participant_stage(2)
             elif guardar:
                 es_mayor = st.session_state.get("part_es_mayor_option") == "Sí"
-                doc_p = st.session_state.get("part_doc_p", "")
-                doc_a = st.session_state.get("part_doc_a", "")
-                nom_a = st.session_state.get("part_nom_a", "")
+                doc_p = _clean_digits(st.session_state.get("part_doc_p", ""))
+                doc_a = _clean_digits(st.session_state.get("part_doc_a", ""))
+                nom_a = _clean_string(st.session_state.get("part_nom_a", ""))
+                ape_a = _clean_string(st.session_state.get("part_ape_a", ""))
+                tel_p = _clean_string(st.session_state.get("part_tel", ""))
+                correo_p = _clean_string(st.session_state.get("part_correo", ""))
+                direccion = _clean_string(st.session_state.get("part_direccion", ""))
+                eps = _clean_string(st.session_state.get("part_eps", ""))
+                rest_alim = _clean_string(st.session_state.get("part_rest_alim", ""))
+                salud_val = _clean_string(st.session_state.get("part_salud_mental", ""))
+                proceso_val = _clean_string(st.session_state.get("part_proceso", ""))
+                tel_a = _clean_string(st.session_state.get("part_tel_a", ""))
+                correo_a = _clean_string(st.session_state.get("part_correo_a", ""))
                 if st.session_state.get("part_conoce_rji") == "":
                     st.error("Cuéntanos si conoces la RJI antes de guardar.")
                 elif not st.session_state.get("part_acepta_datos"):
@@ -796,26 +777,35 @@ with tab1:
                     st.error("Confírmanos si eres mayor de edad para continuar.")
                 elif (not es_mayor) and (not doc_a.strip().isdigit() or not nom_a.strip() or not st.session_state.get("part_tipo_doc_a")):
                     st.error("Para menores, el documento y nombre del acudiente son obligatorios (solo dígitos en el documento).")
-                elif not st.session_state.get("part_nombres") or not st.session_state.get("part_apellidos"):
+                elif not nombres_val or not apellidos_val:
                     st.error("Ingresa tus nombres y apellidos tal como aparecen en tu documento.")
-                elif not st.session_state.get("part_direccion"):
+                elif not direccion:
                     st.error("Cuéntanos tu dirección de residencia.")
                 elif not st.session_state.get("part_region") or not st.session_state.get("part_ciudad"):
                     st.error("Selecciona tu región y ciudad para continuar.")
                 elif not st.session_state.get("part_talla"):
                     st.error("Selecciona tu talla de camiseta.")
-                elif not st.session_state.get("part_tel", "").strip():
+                elif not tel_p:
                     st.error("Déjanos tu número de contacto personal.")
-                elif not st.session_state.get("part_correo", "").strip():
+                elif not correo_p:
                     st.error("Incluye un correo de contacto personal.")
                 elif (not st.session_state.get("part_tipo_doc_a")) or (not doc_a.strip().isdigit()):
                     st.error("El contacto debe tener tipo de documento y un número válido (solo dígitos).")
-                elif not nom_a.strip() or not st.session_state.get("part_ape_a", "").strip():
+                elif not nom_a or not ape_a:
                     st.error("Ingresa nombres y apellidos del contacto de emergencia.")
-                elif not st.session_state.get("part_tel_a", "").strip():
+                elif not tel_a:
                     st.error("Incluye el teléfono del contacto de emergencia.")
                 elif not st.session_state.get("part_parentesco_a"):
                     st.error("Selecciona el parentesco o vínculo del contacto de emergencia.")
+                elif st.session_state.get("part_acomp_ninguna") and any([
+                    st.session_state.get("part_acomp_familia"),
+                    st.session_state.get("part_acomp_amigos"),
+                    st.session_state.get("part_acomp_escucha"),
+                    st.session_state.get("part_acomp_mentoria"),
+                    st.session_state.get("part_acomp_espiritual"),
+                    st.session_state.get("part_acomp_red_comunidad"),
+                ]):
+                    st.error("Si marcas 'Ninguna por ahora', desmarca el resto de acompañamientos.")
                 else:
                     ts = datetime.now().isoformat(timespec="seconds")
                     intereses = st.session_state.get("part_intereses", [])
@@ -841,18 +831,20 @@ with tab1:
                     contacto_doc_url = ""
                     if st.session_state.get("part_doc_id_bytes") and st.session_state.get("part_doc_id_name"):
                         uploads_dir.mkdir(exist_ok=True)
-                        participante_path = uploads_dir / f"{doc_p.strip()}_{st.session_state['part_doc_id_name']}"
+                        participante_path = uploads_dir / f"{doc_p}_{st.session_state['part_doc_id_name']}"
                         with open(participante_path, "wb") as f:
                             f.write(st.session_state["part_doc_id_bytes"])
                         participante_doc_url = str(participante_path)
                     if st.session_state.get("part_contact_doc_bytes") and st.session_state.get("part_contact_doc_name"):
                         uploads_dir.mkdir(exist_ok=True)
-                        contacto_path = uploads_dir / f"{doc_a.strip()}_{st.session_state['part_contact_doc_name']}"
+                        contacto_path = uploads_dir / f"{doc_a}_{st.session_state['part_contact_doc_name']}"
                         with open(contacto_path, "wb") as f:
                             f.write(st.session_state["part_contact_doc_bytes"])
                         contacto_doc_url = str(contacto_path)
 
-                    full_name = f"{st.session_state.get('part_nombres', '').strip()} {st.session_state.get('part_apellidos', '').strip()}".strip()
+                    nombres_val = _clean_string(st.session_state.get("part_nombres", ""))
+                    apellidos_val = _clean_string(st.session_state.get("part_apellidos", ""))
+                    full_name = f"{nombres_val} {apellidos_val}".strip()
                     edad_aprox = calcular_edad(st.session_state.get("part_fecha_nac"))
                     intereses_text = ", ".join(intereses)
 
@@ -861,27 +853,27 @@ with tab1:
                         "TRUE" if es_mayor else "FALSE",
                         st.session_state.get("part_tipo_doc_p", ""),
                         doc_p.strip(),
-                        st.session_state.get("part_nombres", "").strip(),
-                        st.session_state.get("part_apellidos", "").strip(),
+                        nombres_val,
+                        apellidos_val,
                         full_name,
-                        st.session_state.get("part_apodo", "").strip(),
-                        st.session_state.get("part_tel", "").strip(),
-                        st.session_state.get("part_correo", "").strip(),
-                        st.session_state.get("part_direccion", "").strip(),
+                        _clean_string(st.session_state.get("part_apodo", "")),
+                        tel_p,
+                        correo_p,
+                        direccion,
                         st.session_state.get("part_region", "").strip(),
                         st.session_state.get("part_ciudad", "").strip(),
                         str(st.session_state.get("part_fecha_nac")),
                         edad_aprox,
                         st.session_state.get("part_talla", ""),
-                        st.session_state.get("part_eps", "").strip(),
-                        st.session_state.get("part_rest_alim", "").strip(),
-                        st.session_state.get("part_salud_mental", "").strip(),
-                        st.session_state.get("part_obra", "").strip(),
-                        st.session_state.get("part_proceso", "").strip(),
+                        eps,
+                        rest_alim,
+                        salud_val,
+                        _clean_string(st.session_state.get("part_obra", "")),
+                        proceso_val,
                         intereses_text,
-                        st.session_state.get("part_exp_sig", "").strip(),
-                        st.session_state.get("part_dato_freak", "").strip(),
-                        st.session_state.get("part_pregunta", "").strip(),
+                        _clean_string(st.session_state.get("part_exp_sig", "")),
+                        _clean_string(st.session_state.get("part_dato_freak", "")),
+                        _clean_string(st.session_state.get("part_pregunta", "")),
                         int(ranks["Servicio"]),
                         int(ranks["Peregrinaje"]),
                         int(ranks["Cultura y arte"]),
@@ -890,8 +882,8 @@ with tab1:
                         int(ranks["Incidencia política"]),
                         experiencia_top,
                         perfil_cerc,
-                        st.session_state.get("part_motivo", "").strip(),
-                        st.session_state.get("part_preguntas_frec", "").strip(),
+                        _clean_string(st.session_state.get("part_motivo", "")),
+                        _clean_string(st.session_state.get("part_preguntas_frec", "")),
                         ", ".join(acomp_items),
                         "TRUE" if st.session_state.get("part_acomp_familia") else "FALSE",
                         "TRUE" if st.session_state.get("part_acomp_amigos") else "FALSE",
@@ -903,10 +895,10 @@ with tab1:
                         conoce_map.get(st.session_state.get("part_conoce_rji"), ""),
                         st.session_state.get("part_tipo_doc_a", ""),
                         doc_a.strip(),
-                        nom_a.strip(),
-                        st.session_state.get("part_ape_a", "").strip(),
-                        st.session_state.get("part_tel_a", "").strip(),
-                        st.session_state.get("part_correo_a", "").strip(),
+                        nom_a,
+                        ape_a,
+                        tel_a,
+                        correo_a,
                         st.session_state.get("part_parentesco_a", "").strip(),
                         participante_doc_url,
                         contacto_doc_url,
