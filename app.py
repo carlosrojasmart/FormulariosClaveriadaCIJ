@@ -279,6 +279,7 @@ PARTICIPANT_DEFAULTS = {
     "part_es_mayor_option": "",
     "part_tipo_doc_p": "",
     "part_doc_p": "",
+    "_clean_part_doc_p": "",
     "part_doc_id_name": "",
     "part_doc_id_bytes": b"",
     "part_nombres": "",
@@ -300,6 +301,7 @@ PARTICIPANT_DEFAULTS = {
     "part_proceso": "",
     "part_tipo_doc_a": "",
     "part_doc_a": "",
+    "_clean_part_doc_a": "",
     "part_contact_doc_name": "",
     "part_contact_doc_bytes": b"",
     "part_nom_a": "",
@@ -420,10 +422,11 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
         errors.append("Confírmanos si eres mayor de edad para continuar.")
 
     doc_ok, cleaned_doc = _normalize_numeric_input(st.session_state.get("part_doc_p", ""))
-    if not doc_ok:
-        errors.append("El documento del participante debe contener solo dígitos.")
+    if doc_ok:
+        st.session_state["_clean_part_doc_p"] = cleaned_doc
     else:
-        st.session_state.part_doc_p = cleaned_doc
+        st.session_state["_clean_part_doc_p"] = ""
+        errors.append("El documento del participante debe contener solo dígitos.")
 
     if not st.session_state.get("part_tipo_doc_p"):
         errors.append("Selecciona el tipo de documento del participante.")
@@ -463,8 +466,11 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
 
     if contacto_doc_issue and not menores_reportado:
         errors.append("El contacto debe tener tipo de documento y un número válido (solo dígitos).")
-    elif not contacto_doc_issue:
-        st.session_state.part_doc_a = cleaned_doc_a
+
+    if contacto_doc_issue:
+        st.session_state["_clean_part_doc_a"] = ""
+    else:
+        st.session_state["_clean_part_doc_a"] = cleaned_doc_a
 
     if contacto_name_issue and not menores_reportado:
         errors.append("Ingresa nombres y apellidos del contacto de emergencia.")
@@ -903,8 +909,17 @@ with tab1:
                     pass
                 else:
                     es_mayor = st.session_state.get("part_es_mayor_option") == "Sí"
-                    doc_p = st.session_state.get("part_doc_p", "").strip()
-                    doc_a = st.session_state.get("part_doc_a", "").strip()
+                    doc_p_clean = st.session_state.get("_clean_part_doc_p", "").strip()
+                    if not doc_p_clean:
+                        doc_ok, normalized = _normalize_numeric_input(st.session_state.get("part_doc_p", ""))
+                        doc_p_clean = normalized if doc_ok else st.session_state.get("part_doc_p", "").strip()
+                    doc_p = doc_p_clean
+
+                    doc_a_clean = st.session_state.get("_clean_part_doc_a", "").strip()
+                    if not doc_a_clean:
+                        doc_a_ok, normalized_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
+                        doc_a_clean = normalized_a if doc_a_ok else st.session_state.get("part_doc_a", "").strip()
+                    doc_a = doc_a_clean
                     nom_a = st.session_state.get("part_nom_a", "")
 
                     ts = datetime.now().isoformat(timespec="seconds")
