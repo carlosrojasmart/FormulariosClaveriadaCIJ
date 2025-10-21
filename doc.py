@@ -1,11 +1,50 @@
 # doc.py
-from docx import Document
-from docx.shared import Pt, Inches, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
 from datetime import date, datetime
 from pathlib import Path
+import re
+import textwrap
+
+import gspread
 import pandas as pd
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Inches, Pt
+from google.oauth2.service_account import Credentials
+
+
+def _normalize_private_key(info: dict) -> dict:
+    cleaned = dict(info) if info is not None else {}
+    pk = cleaned.get("private_key")
+    if not isinstance(pk, str):
+        return cleaned
+
+    raw = pk.strip().strip("\"'")
+    raw = raw.replace("\r", "\n")
+    raw = raw.replace("\\r", "\n").replace("\\n", "\n")
+    try:
+        raw = raw.encode("utf-8").decode("unicode_escape")
+    except UnicodeDecodeError:
+        pass
+
+    if "BEGIN PRIVATE KEY" not in raw or "END PRIVATE KEY" not in raw:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    match = re.search(r"-----BEGIN PRIVATE KEY-----\s*(.*?)\s*-----END PRIVATE KEY-----", raw, re.DOTALL)
+    if not match:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    body = re.sub(r"\s+", "", match.group(1))
+    if not body:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    normalized = "-----BEGIN PRIVATE KEY-----\n"
+    normalized += "\n".join(textwrap.wrap(body, 64))
+    normalized += "\n-----END PRIVATE KEY-----\n"
+    cleaned["private_key"] = normalized
+    return cleaned
 
 # ====== CONFIGURA AQUÍ ======
 INFO_EVENTO = {
@@ -220,18 +259,49 @@ def demo_manual():
     print(f"Documento generado: {out}")
 
 
-# ====== MODO 2: GENERAR LEYENDO EXCEL ======
-def generar_desde_excel(path_excel, documento_acompanante, out_path=None):
+# ====== MODO 2: GENERAR DESDE GOOGLE SHEETS ======
+def generar_desde_google_sheet(
+    spreadsheet_id,
+    documento_acompanante,
+    out_path=None,
+    credentials_json_path=None,
+    credentials_info=None,
+):
     """
-    Lee PARTICIPANTES de tu Excel y arma la lista para el acompañante dado.
-    Usa columnas de la app: es_mayor_edad, documento_acudiente, nombre_completo, documento_participante,
-    fecha_nacimiento, eps, salud_mental, restricciones_alimentarias.
+    Lee la pestaña PARTICIPANTES desde una hoja de Google y arma la lista para el acompañante dado.
+    Debes pasar el ID de la hoja y las credenciales del Service Account (ruta al JSON o el dict ya cargado).
     """
-    dfp = pd.read_excel(path_excel, sheet_name="PARTICIPANTES")
+    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    if credentials_info:
+        creds = Credentials.from_service_account_info(_normalize_private_key(credentials_info), scopes=scopes)
+    elif credentials_json_path:
+        creds = Credentials.from_service_account_file(credentials_json_path, scopes=scopes)
+    else:
+        raise ValueError("Debes proporcionar credentials_info o credentials_json_path para acceder a la hoja de cálculo.")
+
+    client = gspread.authorize(creds)
+    sh = client.open_by_key(spreadsheet_id)
+    ws = sh.worksheet("PARTICIPANTES")
+    registros = ws.get_all_records()
+    dfp = pd.DataFrame(registros)
+    if dfp.empty:
+        dfp = pd.DataFrame(columns=[
+            "es_mayor_edad","documento_contacto","nombre_completo","documento_participante",
+            "fecha_nacimiento","eps","salud_mental","restricciones_alimentarias"
+        ])
+    for col in [
+        "es_mayor_edad","documento_contacto","nombre_completo","documento_participante",
+        "fecha_nacimiento","eps","salud_mental","restricciones_alimentarias"
+    ]:
+        if col not in dfp.columns:
+            dfp[col] = ""
     # Filtrar menores que declararon a este acudiente
     m = (
         (dfp["es_mayor_edad"].astype(str).str.lower().isin(["false", "no", "0"]))
-        & (dfp["documento_acudiente"].astype(str).str.replace(r"\s+", "", regex=True) == str(documento_acompanante).replace(" ", ""))
+        & (
+            dfp["documento_contacto"].astype(str).str.replace(r"\s+", "", regex=True)
+            == str(documento_acompanante).replace(" ", "")
+        )
     )
     sub = dfp[m].copy()
 
@@ -274,9 +344,13 @@ def generar_desde_excel(path_excel, documento_acompanante, out_path=None):
 if __name__ == "__main__":
     # === Elige cómo probar ===
     # 1) Demo manual (rápido):
-     demo_manual()
+    demo_manual()
 
-    # 2) Desde tu Excel:
-    # generar_desde_excel("rji_datos.xlsx", documento_acompanante="99887766")
+    # 2) Desde Google Sheets:
+    # generar_desde_google_sheet(
+    #     "1vVyWpY1izl8wcESXK-mdXNOqHzyc-yGUZcZ1H-0sMNs",
+    #     documento_acompanante="99887766",
+    #     credentials_json_path="ruta/a/tu-service-account.json",
+    # )
 
    
