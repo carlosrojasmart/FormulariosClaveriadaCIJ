@@ -433,6 +433,23 @@ with tab1:
 
     experiencias = ["Servicio", "Peregrinaje", "Cultura y arte", "Espiritualidad", "Vocación", "Incidencia política"]
 
+    ACOMP_KEYS = [
+        "part_acomp_familia",
+        "part_acomp_amigos",
+        "part_acomp_escucha",
+        "part_acomp_mentoria",
+        "part_acomp_espiritual",
+        "part_acomp_red_comunidad",
+    ]
+
+    def _clear_acomp_when_none_selected():
+        for acomp_key in ACOMP_KEYS:
+            st.session_state[acomp_key] = False
+
+    def _unset_none_if_other_selected():
+        if st.session_state.get("part_acomp_ninguna"):
+            st.session_state["part_acomp_ninguna"] = False
+
     if stage == 1:
         with st.form("form_participante_stage1", clear_on_submit=False):
             st.subheader("Información básica")
@@ -697,26 +714,41 @@ with tab1:
             st.caption("Durante el encuentro de Claveriado 2026 tendremos distintas actividades de acompañamiento. Marca los acompañamientos con los que cuentas o quisieras fortalecer.")
             col_a, col_b, col_c = st.columns(3)
             col_d, col_e, col_f = st.columns(3)
-            col_a.checkbox("Familia", key="part_acomp_familia")
-            col_b.checkbox("Amigos", key="part_acomp_amigos")
-            col_c.checkbox("Escucha activa / apoyo emocional", key="part_acomp_escucha")
-            col_d.checkbox("Mentoría o tutoría", key="part_acomp_mentoria")
-            col_e.checkbox("Acompañamiento espiritual", key="part_acomp_espiritual")
-            col_f.checkbox("Red comunitaria o institucional", key="part_acomp_red_comunidad")
-            st.checkbox("Ninguna por ahora", key="part_acomp_ninguna")
-
-            if st.session_state.get("part_acomp_ninguna"):
-                for acomp_key in ["part_acomp_familia", "part_acomp_amigos", "part_acomp_escucha", "part_acomp_mentoria", "part_acomp_espiritual", "part_acomp_red_comunidad"]:
-                    st.session_state[acomp_key] = False
-            elif any([
-                st.session_state.get("part_acomp_familia"),
-                st.session_state.get("part_acomp_amigos"),
-                st.session_state.get("part_acomp_escucha"),
-                st.session_state.get("part_acomp_mentoria"),
-                st.session_state.get("part_acomp_espiritual"),
-                st.session_state.get("part_acomp_red_comunidad"),
-            ]):
-                st.session_state.part_acomp_ninguna = False
+            col_a.checkbox(
+                "Familia",
+                key="part_acomp_familia",
+                on_change=_unset_none_if_other_selected,
+            )
+            col_b.checkbox(
+                "Amigos",
+                key="part_acomp_amigos",
+                on_change=_unset_none_if_other_selected,
+            )
+            col_c.checkbox(
+                "Escucha activa / apoyo emocional",
+                key="part_acomp_escucha",
+                on_change=_unset_none_if_other_selected,
+            )
+            col_d.checkbox(
+                "Mentoría o tutoría",
+                key="part_acomp_mentoria",
+                on_change=_unset_none_if_other_selected,
+            )
+            col_e.checkbox(
+                "Acompañamiento espiritual",
+                key="part_acomp_espiritual",
+                on_change=_unset_none_if_other_selected,
+            )
+            col_f.checkbox(
+                "Red comunitaria o institucional",
+                key="part_acomp_red_comunidad",
+                on_change=_unset_none_if_other_selected,
+            )
+            st.checkbox(
+                "Ninguna por ahora",
+                key="part_acomp_ninguna",
+                on_change=_clear_acomp_when_none_selected,
+            )
 
             conoce_opciones = ["Sí", "No", "Más o menos"]
             conoce_val = st.session_state.get("part_conoce_rji", "")
