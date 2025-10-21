@@ -433,6 +433,15 @@ with tab1:
 
     experiencias = ["Servicio", "Peregrinaje", "Cultura y arte", "Espiritualidad", "Vocación", "Incidencia política"]
 
+    ACOMP_KEYS = [
+        "part_acomp_familia",
+        "part_acomp_amigos",
+        "part_acomp_escucha",
+        "part_acomp_mentoria",
+        "part_acomp_espiritual",
+        "part_acomp_red_comunidad",
+    ]
+
     if stage == 1:
         with st.form("form_participante_stage1", clear_on_submit=False):
             st.subheader("Información básica")
@@ -619,8 +628,10 @@ with tab1:
             st.text_input("Propón una pregunta para conectar con otros", key="part_pregunta")
 
             col1, col2 = st.columns(2)
-            volver = col1.form_submit_button("Retroceder", use_container_width=True)
-            avanzar = col2.form_submit_button("Avanzar a experiencias", use_container_width=True)
+            with col1:
+                volver = st.form_submit_button("Retroceder", use_container_width=True)
+            with col2:
+                avanzar = st.form_submit_button("Avanzar a experiencias", use_container_width=True)
             if volver:
                 _goto_participant_stage(1)
             elif avanzar:
@@ -697,24 +708,45 @@ with tab1:
             col_d, col_e, col_f = st.columns(3)
             col_a.checkbox("Familia", key="part_acomp_familia")
             col_b.checkbox("Amigos", key="part_acomp_amigos")
-            col_c.checkbox("Escucha activa / apoyo emocional", key="part_acomp_escucha")
+            col_c.checkbox(
+                "Escucha activa / apoyo emocional",
+                key="part_acomp_escucha",
+            )
             col_d.checkbox("Mentoría o tutoría", key="part_acomp_mentoria")
             col_e.checkbox("Acompañamiento espiritual", key="part_acomp_espiritual")
-            col_f.checkbox("Red comunitaria o institucional", key="part_acomp_red_comunidad")
+            col_f.checkbox(
+                "Red comunitaria o institucional",
+                key="part_acomp_red_comunidad",
+            )
             st.checkbox("Ninguna por ahora", key="part_acomp_ninguna")
 
-            if st.session_state.get("part_acomp_ninguna"):
-                for acomp_key in ["part_acomp_familia", "part_acomp_amigos", "part_acomp_escucha", "part_acomp_mentoria", "part_acomp_espiritual", "part_acomp_red_comunidad"]:
-                    st.session_state[acomp_key] = False
-            elif any([
-                st.session_state.get("part_acomp_familia"),
-                st.session_state.get("part_acomp_amigos"),
-                st.session_state.get("part_acomp_escucha"),
-                st.session_state.get("part_acomp_mentoria"),
-                st.session_state.get("part_acomp_espiritual"),
-                st.session_state.get("part_acomp_red_comunidad"),
-            ]):
-                st.session_state.part_acomp_ninguna = False
+            current_none = bool(st.session_state.get("part_acomp_ninguna"))
+            current_values = {
+                key: bool(st.session_state.get(key))
+                for key in ACOMP_KEYS
+            }
+            prev_values = st.session_state.get("_prev_part_acomp_values")
+            prev_none = st.session_state.get("_prev_part_acomp_ninguna")
+
+            none_toggled_on = current_none and not bool(prev_none)
+            if prev_values is None:
+                toggled_other_keys = [key for key, val in current_values.items() if val]
+            else:
+                toggled_other_keys = [
+                    key
+                    for key, val in current_values.items()
+                    if val and not bool(prev_values.get(key))
+                ]
+
+            if none_toggled_on:
+                for key in ACOMP_KEYS:
+                    if st.session_state.get(key):
+                        st.session_state[key] = False
+            elif toggled_other_keys and current_none:
+                st.session_state["part_acomp_ninguna"] = False
+
+            st.session_state["_prev_part_acomp_values"] = current_values
+            st.session_state["_prev_part_acomp_ninguna"] = current_none
 
             conoce_opciones = ["Sí", "No", "Más o menos"]
             conoce_val = st.session_state.get("part_conoce_rji", "")
@@ -741,8 +773,10 @@ with tab1:
             )
 
             col_back, col_save = st.columns(2)
-            volver_etapa = col_back.form_submit_button("Retroceder", use_container_width=True)
-            guardar = col_save.form_submit_button("Guardar participante", use_container_width=True)
+            with col_back:
+                volver_etapa = st.form_submit_button("Retroceder", use_container_width=True)
+            with col_save:
+                guardar = st.form_submit_button("Guardar participante", use_container_width=True)
             if volver_etapa:
                 _goto_participant_stage(2)
             elif guardar:
