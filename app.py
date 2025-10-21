@@ -335,6 +335,25 @@ def _init_participant_state():
             st.session_state[key] = copy.deepcopy(value)
 
 
+def _reset_participant_state():
+    """Reset stored participant answers after a successful submission."""
+    for key, value in PARTICIPANT_DEFAULTS.items():
+        st.session_state[key] = copy.deepcopy(value)
+
+    # Clear transient helper caches so toggles and uploads start fresh.
+    for transient_key in (
+        "_prev_part_acomp_values",
+        "_prev_part_acomp_ninguna",
+        "part_exp_order",
+        "exp_sort",
+        "part_doc_archivo",
+        "part_contact_doc",
+    ):
+        st.session_state.pop(transient_key, None)
+
+    st.session_state.pop("_participant_reset_pending", None)
+
+
 def _participant_stage_fields(stage: int):
     base = {
         1: [
@@ -535,10 +554,17 @@ def render_stage_progress(stage: int):
     )
 
 
+if st.session_state.get("_participant_reset_pending"):
+    _reset_participant_state()
+
 _init_participant_state()
 
 # ================= PARTICIPANTE =================
 with tab1:
+    success_message = st.session_state.pop("_participant_success_message", "")
+    if success_message:
+        st.success(success_message)
+
     stage = st.session_state.part_step
     stage_titles = {
         1: "Etapa 1 · Datos personales",
@@ -1024,12 +1050,9 @@ with tab1:
                             update_unificado(SPREADSHEET_ID)
                         except Exception:
                             pass
-                        st.success("¡Tu registro quedó guardado! Gracias por llegar al final ✨")
-                        for key, value in PARTICIPANT_DEFAULTS.items():
-                            st.session_state[key] = copy.deepcopy(value)
-                        st.session_state.pop("exp_sort", None)
-                        st.session_state.pop("part_doc_archivo", None)
-                        st.session_state.pop("part_contact_doc", None)
+                        st.session_state["_participant_success_message"] = "¡Tu registro quedó guardado! Gracias por llegar al final ✨"
+                        st.session_state["_participant_reset_pending"] = True
+                        st.experimental_rerun()
                     except Exception as e:
                         st.error(f"No se pudo guardar: {e}")
 
