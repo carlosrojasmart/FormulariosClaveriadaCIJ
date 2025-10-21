@@ -188,6 +188,28 @@ def _clean_string(value: object) -> str:
     return normalized
 
 
+def _clean_phone_number(value: object) -> str:
+    """Normalize a phone number keeping digits and an optional leading plus."""
+    if not isinstance(value, str):
+        return ""
+    normalized = unicodedata.normalize("NFKC", value)
+    normalized = normalized.strip()
+    if not normalized:
+        return ""
+    has_plus = normalized.startswith("+")
+    digits = "".join(ch for ch in normalized if ch.isdigit())
+    if not digits:
+        return ""
+    return f"+{digits}" if has_plus else digits
+
+
+def _format_phone_for_sheet(value: str) -> str:
+    """Prefix phone numbers with ' so Sheets treats them as literal text."""
+    if not value:
+        return ""
+    return f"'{value}"
+
+
 def _get_participant_payload() -> dict:
     """Centralized storage for the participant export row."""
     return st.session_state.setdefault("_participant_payload", {})
@@ -481,8 +503,9 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
     if not st.session_state.get("part_talla"):
         errors.append("Selecciona tu talla de camiseta.")
 
-    if not st.session_state.get("part_tel", "").strip():
-        errors.append("Déjanos tu número de contacto personal.")
+    tel_clean = _clean_phone_number(st.session_state.get("part_tel", ""))
+    if not tel_clean:
+        errors.append("Déjanos un número de contacto personal válido (puedes incluir el prefijo +57).")
 
     if not st.session_state.get("part_correo", "").strip():
         errors.append("Incluye un correo de contacto personal.")
@@ -491,7 +514,7 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
     tipo_doc_a = st.session_state.get("part_tipo_doc_a", "")
     nom_a = st.session_state.get("part_nom_a", "").strip()
     ape_a = st.session_state.get("part_ape_a", "").strip()
-    tel_a = st.session_state.get("part_tel_a", "").strip()
+    tel_a_clean = _clean_phone_number(st.session_state.get("part_tel_a", ""))
     parentesco = st.session_state.get("part_parentesco_a", "")
 
     contacto_doc_issue = not tipo_doc_a or not doc_a_ok
@@ -513,8 +536,8 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
     if contacto_name_issue and not menores_reportado:
         errors.append("Ingresa nombres y apellidos del contacto de emergencia.")
 
-    if not tel_a:
-        errors.append("Incluye el teléfono del contacto de emergencia.")
+    if not tel_a_clean:
+        errors.append("Incluye un teléfono válido para el contacto de emergencia (puedes incluir el prefijo +57).")
 
     if not parentesco:
         errors.append("Selecciona el parentesco o vínculo del contacto de emergencia.")
@@ -536,7 +559,7 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
                 "nombres": _clean_string(st.session_state.get("part_nombres", "")),
                 "apellidos": _clean_string(st.session_state.get("part_apellidos", "")),
                 "como_te_gusta_que_te_digan": _clean_string(st.session_state.get("part_apodo", "")),
-                "telefono_celular": _clean_string(st.session_state.get("part_tel", "")),
+                "telefono_celular": tel_clean,
                 "correo": _clean_string(st.session_state.get("part_correo", "")),
                 "direccion": _clean_string(st.session_state.get("part_direccion", "")),
                 "region": _clean_string(st.session_state.get("part_region", "")),
@@ -552,7 +575,7 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
                 "documento_contacto": cleaned_doc_a if doc_a_ok else _clean_string(st.session_state.get("part_doc_a", "")),
                 "nombres_contacto": _clean_string(nom_a),
                 "apellidos_contacto": _clean_string(ape_a),
-                "telefono_contacto": _clean_string(tel_a),
+                "telefono_contacto": tel_a_clean,
                 "correo_contacto": _clean_string(st.session_state.get("part_correo_a", "")),
                 "parentesco_contacto": _clean_string(parentesco),
             }
@@ -1046,25 +1069,26 @@ with tab1:
                         acomp_items.append("Ninguna")
 
                     payload = _get_participant_payload()
-                    CRITICAL_KEYS = {
-                        "nombres",
-                        "apellidos",
-                        "telefono_celular",
-                        "correo",
-                        "direccion",
-                        "region",
-                        "ciudad",
-                        "nombres_contacto",
-                        "apellidos_contacto",
-                        "telefono_contacto",
-                        "parentesco_contacto",
-                    }
 
-                    def _capture_clean(key: str, value: object) -> str:
-                        clean = _clean_string(value)
-                        if clean or key not in payload or key not in CRITICAL_KEYS:
+                    def _capture_field(
+                        key: str,
+                        raw_value: object,
+                        *,
+                        sanitizer=_clean_string,
+                        allow_empty: bool = False,
+                    ) -> str:
+                        existing = payload.get(key, "")
+                        clean = sanitizer(raw_value)
+                        if clean:
                             payload[key] = clean
-                        return payload.get(key, clean)
+                            return clean
+                        if allow_empty and (
+                            raw_value is None
+                            or (isinstance(raw_value, str) and raw_value == "")
+                        ):
+                            payload[key] = ""
+                            return ""
+                        return existing
 
                     if doc_p:
                         payload["documento_participante"] = doc_p
@@ -1092,19 +1116,44 @@ with tab1:
                             f.write(st.session_state["part_contact_doc_bytes"])
                         contacto_doc_url = str(contacto_path)
 
-                    nombres_val = _capture_clean("nombres", st.session_state.get("part_nombres", ""))
-                    apellidos_val = _capture_clean("apellidos", st.session_state.get("part_apellidos", ""))
-                    apodo_val = _capture_clean("como_te_gusta_que_te_digan", st.session_state.get("part_apodo", ""))
-                    tel_val = _capture_clean("telefono_celular", st.session_state.get("part_tel", ""))
-                    correo_val = _capture_clean("correo", st.session_state.get("part_correo", ""))
-                    direccion_val = _capture_clean("direccion", st.session_state.get("part_direccion", ""))
-                    region_val = _capture_clean("region", st.session_state.get("part_region", ""))
-                    ciudad_val = _capture_clean("ciudad", st.session_state.get("part_ciudad", ""))
-                    eps_val = _capture_clean("eps", st.session_state.get("part_eps", ""))
-                    rest_alim_val = _capture_clean("restricciones_alimentarias", st.session_state.get("part_rest_alim", ""))
-                    salud_mental_val = _capture_clean("salud_mental", st.session_state.get("part_salud_mental", ""))
-                    obra_val = _capture_clean("obra_institucion", st.session_state.get("part_obra", ""))
-                    proceso_val = _capture_clean("proceso_juvenil", st.session_state.get("part_proceso", ""))
+                    nombres_val = _capture_field("nombres", st.session_state.get("part_nombres", ""))
+                    apellidos_val = _capture_field("apellidos", st.session_state.get("part_apellidos", ""))
+                    apodo_val = _capture_field(
+                        "como_te_gusta_que_te_digan",
+                        st.session_state.get("part_apodo", ""),
+                        allow_empty=True,
+                    )
+                    tel_val = _capture_field(
+                        "telefono_celular",
+                        st.session_state.get("part_tel", ""),
+                        sanitizer=_clean_phone_number,
+                    )
+                    tel_val_sheet = _format_phone_for_sheet(tel_val)
+                    correo_val = _capture_field("correo", st.session_state.get("part_correo", ""))
+                    direccion_val = _capture_field("direccion", st.session_state.get("part_direccion", ""))
+                    region_val = _capture_field("region", st.session_state.get("part_region", ""))
+                    ciudad_val = _capture_field("ciudad", st.session_state.get("part_ciudad", ""))
+                    eps_val = _capture_field(
+                        "eps",
+                        st.session_state.get("part_eps", ""),
+                        allow_empty=True,
+                    )
+                    rest_alim_val = _capture_field(
+                        "restricciones_alimentarias",
+                        st.session_state.get("part_rest_alim", ""),
+                        allow_empty=True,
+                    )
+                    salud_mental_val = _capture_field(
+                        "salud_mental",
+                        st.session_state.get("part_salud_mental", ""),
+                        allow_empty=True,
+                    )
+                    obra_val = _capture_field("obra_institucion", st.session_state.get("part_obra", ""))
+                    proceso_val = _capture_field(
+                        "proceso_juvenil",
+                        st.session_state.get("part_proceso", ""),
+                        allow_empty=True,
+                    )
 
                     exp_sig_val = payload.get("experiencia_significativa") or _clean_string(st.session_state.get("part_exp_sig", ""))
                     if exp_sig_val:
@@ -1113,16 +1162,37 @@ with tab1:
                     if intereses:
                         payload["intereses_personales"] = list(intereses)
                         intereses_payload = payload["intereses_personales"]
-                    dato_freak_val = _capture_clean("hobby_o_dato_curioso", st.session_state.get("part_dato_freak", ""))
-                    pregunta_val = _capture_clean("pregunta_para_conectar", st.session_state.get("part_pregunta", ""))
-                    motivo_val = _capture_clean("motivo_experiencia_top", st.session_state.get("part_motivo", ""))
-                    preguntas_frec_val = _capture_clean("preguntas_frecuentes", st.session_state.get("part_preguntas_frec", ""))
+                    dato_freak_val = _capture_field(
+                        "hobby_o_dato_curioso",
+                        st.session_state.get("part_dato_freak", ""),
+                        allow_empty=True,
+                    )
+                    pregunta_val = _capture_field(
+                        "pregunta_para_conectar",
+                        st.session_state.get("part_pregunta", ""),
+                        allow_empty=True,
+                    )
+                    motivo_val = _capture_field("motivo_experiencia_top", st.session_state.get("part_motivo", ""))
+                    preguntas_frec_val = _capture_field(
+                        "preguntas_frecuentes",
+                        st.session_state.get("part_preguntas_frec", ""),
+                        allow_empty=True,
+                    )
 
-                    nom_a_clean = _capture_clean("nombres_contacto", nom_a)
-                    ape_a_clean = _capture_clean("apellidos_contacto", st.session_state.get("part_ape_a", ""))
-                    tel_a_clean = _capture_clean("telefono_contacto", st.session_state.get("part_tel_a", ""))
-                    correo_a_clean = _capture_clean("correo_contacto", st.session_state.get("part_correo_a", ""))
-                    parentesco_clean = _capture_clean("parentesco_contacto", st.session_state.get("part_parentesco_a", ""))
+                    nom_a_clean = _capture_field("nombres_contacto", nom_a)
+                    ape_a_clean = _capture_field("apellidos_contacto", st.session_state.get("part_ape_a", ""))
+                    tel_a_clean = _capture_field(
+                        "telefono_contacto",
+                        st.session_state.get("part_tel_a", ""),
+                        sanitizer=_clean_phone_number,
+                    )
+                    tel_a_sheet = _format_phone_for_sheet(tel_a_clean)
+                    correo_a_clean = _capture_field(
+                        "correo_contacto",
+                        st.session_state.get("part_correo_a", ""),
+                        allow_empty=True,
+                    )
+                    parentesco_clean = _capture_field("parentesco_contacto", st.session_state.get("part_parentesco_a", ""))
 
                     fecha_nac_value = st.session_state.get("part_fecha_nac")
                     if fecha_nac_value is not None or "fecha_nacimiento" not in payload:
@@ -1166,7 +1236,7 @@ with tab1:
                         apellidos_val,
                         full_name,
                         apodo_val,
-                        tel_val,
+                        tel_val_sheet,
                         correo_val,
                         direccion_val,
                         region_val,
@@ -1206,7 +1276,7 @@ with tab1:
                         payload.get("documento_contacto", doc_a),
                         nom_a_clean,
                         ape_a_clean,
-                        tel_a_clean,
+                        tel_a_sheet,
                         correo_a_clean,
                         parentesco_clean,
                         payload.get("archivo_doc_participante", participante_doc_url),
