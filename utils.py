@@ -177,7 +177,13 @@ def append_row(spreadsheet_id: str, sheet: str, row: list, expected_cols: list):
 
 
 def upload_file_to_drive(local_path: Path, folder_id: str = "") -> str:
-    """Upload a file to Drive and return a shareable link."""
+    """Upload a file to Drive and return a shareable link.
+
+    When a Shared Drive folder is provided the request must opt-in to
+    ``supportsAllDrives`` or Drive rejects the upload. Streamlit users often
+    store the destination folder inside a shared drive, so we set the flag
+    both for the file upload and the permission share call.
+    """
     if not isinstance(local_path, Path):
         local_path = Path(str(local_path))
 
@@ -212,25 +218,42 @@ def upload_file_to_drive(local_path: Path, folder_id: str = "") -> str:
     body.seek(0)
 
     headers = {"Content-Type": f"multipart/related; boundary={boundary}"}
-    upload_url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
+    upload_url = "https://www.googleapis.com/upload/drive/v3/files"
+    params = {"uploadType": "multipart"}
+    # Allow uploading to shared drives when the folder belongs to one.
+    params["supportsAllDrives"] = "true"
 
-    response = session.post(upload_url, headers=headers, data=body.getvalue())
+    response = session.post(
+        upload_url,
+        headers=headers,
+        params=params,
+        data=body.getvalue(),
+    )
     if response.status_code not in (200, 201):
         return ""
 
     payload = response.json() if response.content else {}
     file_id = payload.get("id")
+    web_view_link = payload.get("webViewLink")
     if not file_id:
         return ""
+
+    permission_params = {
+        "sendNotificationEmail": "false",
+        "supportsAllDrives": "true",
+    }
 
     try:
         session.post(
             f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
-            params={"sendNotificationEmail": "false"},
+            params=permission_params,
             json={"role": "reader", "type": "anyone"},
         )
     except Exception:
         pass
+
+    if isinstance(web_view_link, str) and web_view_link.startswith("http"):
+        return web_view_link
 
     return f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
 
