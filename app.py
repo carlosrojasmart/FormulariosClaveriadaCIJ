@@ -393,6 +393,123 @@ def _goto_participant_stage(stage: int):
     st.session_state.part_step = stage
 
 
+def _emit_stage_errors(messages, show: bool = True) -> bool:
+    if show:
+        for message in messages:
+            st.error(message)
+    return len(messages) == 0
+
+
+def _normalize_numeric_input(value: str) -> tuple[bool, str]:
+    raw = (value or "").strip()
+    if not raw:
+        return False, ""
+    allowed = set("0123456789 .-")
+    if any(ch not in allowed for ch in raw):
+        return False, ""
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return False, ""
+    return True, digits
+
+
+def _validate_participant_stage1(show_errors: bool = True) -> bool:
+    errors = []
+    mayor_option = st.session_state.get("part_es_mayor_option", "")
+    if mayor_option not in {"Sí", "No"}:
+        errors.append("Confírmanos si eres mayor de edad para continuar.")
+
+    doc_ok, cleaned_doc = _normalize_numeric_input(st.session_state.get("part_doc_p", ""))
+    if not doc_ok:
+        errors.append("El documento del participante debe contener solo dígitos.")
+    else:
+        st.session_state.part_doc_p = cleaned_doc
+
+    if not st.session_state.get("part_tipo_doc_p"):
+        errors.append("Selecciona el tipo de documento del participante.")
+
+    if not st.session_state.get("part_nombres", "").strip() or not st.session_state.get("part_apellidos", "").strip():
+        errors.append("Ingresa tus nombres y apellidos tal como aparecen en tu documento.")
+
+    if not st.session_state.get("part_direccion", "").strip():
+        errors.append("Cuéntanos tu dirección de residencia.")
+
+    if not st.session_state.get("part_region") or not st.session_state.get("part_ciudad"):
+        errors.append("Selecciona tu región y ciudad para continuar.")
+
+    if not st.session_state.get("part_talla"):
+        errors.append("Selecciona tu talla de camiseta.")
+
+    if not st.session_state.get("part_tel", "").strip():
+        errors.append("Déjanos tu número de contacto personal.")
+
+    if not st.session_state.get("part_correo", "").strip():
+        errors.append("Incluye un correo de contacto personal.")
+
+    doc_a_ok, cleaned_doc_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
+    tipo_doc_a = st.session_state.get("part_tipo_doc_a", "")
+    nom_a = st.session_state.get("part_nom_a", "").strip()
+    ape_a = st.session_state.get("part_ape_a", "").strip()
+    tel_a = st.session_state.get("part_tel_a", "").strip()
+    parentesco = st.session_state.get("part_parentesco_a", "")
+
+    contacto_doc_issue = not tipo_doc_a or not doc_a_ok
+    contacto_name_issue = not nom_a or not ape_a
+    es_menor = mayor_option == "No"
+    menores_reportado = False
+    if es_menor and (contacto_doc_issue or contacto_name_issue):
+        errors.append("Para menores, el documento y nombre del acudiente son obligatorios (solo dígitos en el documento).")
+        menores_reportado = True
+
+    if contacto_doc_issue and not menores_reportado:
+        errors.append("El contacto debe tener tipo de documento y un número válido (solo dígitos).")
+    elif not contacto_doc_issue:
+        st.session_state.part_doc_a = cleaned_doc_a
+
+    if contacto_name_issue and not menores_reportado:
+        errors.append("Ingresa nombres y apellidos del contacto de emergencia.")
+
+    if not tel_a:
+        errors.append("Incluye el teléfono del contacto de emergencia.")
+
+    if not parentesco:
+        errors.append("Selecciona el parentesco o vínculo del contacto de emergencia.")
+
+    return _emit_stage_errors(errors, show_errors)
+
+
+def _validate_participant_stage2(show_errors: bool = True) -> bool:
+    errors = []
+    if not st.session_state.get("part_exp_sig", "").strip():
+        errors.append("Cuéntanos una experiencia juvenil significativa.")
+
+    intereses = st.session_state.get("part_intereses", [])
+    if not intereses:
+        errors.append("Selecciona al menos un interés personal (hasta 3).")
+
+    if not st.session_state.get("part_dato_freak", "").strip():
+        errors.append("Comparte un hobby o dato curioso para continuar.")
+
+    if not st.session_state.get("part_pregunta", "").strip():
+        errors.append("Propón una pregunta para conectar con otros participantes.")
+
+    return _emit_stage_errors(errors, show_errors)
+
+
+def _validate_participant_stage3(show_errors: bool = True) -> bool:
+    errors = []
+    if not st.session_state.get("part_motivo", "").strip():
+        errors.append("Cuéntanos por qué te interesa tu experiencia prioritaria.")
+
+    if st.session_state.get("part_conoce_rji") == "":
+        errors.append("Cuéntanos si conoces la RJI antes de guardar.")
+
+    if not st.session_state.get("part_acepta_datos"):
+        errors.append("Debes aceptar el aviso de privacidad.")
+
+    return _emit_stage_errors(errors, show_errors)
+
+
 def render_stage_progress(stage: int):
     _, porcentaje, respondidas, total = _stage_progress(stage)
     st.markdown(
@@ -602,7 +719,8 @@ with tab1:
 
             avanzar = st.form_submit_button("Avanzar a intereses", use_container_width=True)
             if avanzar:
-                _goto_participant_stage(2)
+                if _validate_participant_stage1():
+                    _goto_participant_stage(2)
 
     elif stage == 2:
         intereses_full = [
@@ -635,7 +753,8 @@ with tab1:
             if volver:
                 _goto_participant_stage(1)
             elif avanzar:
-                _goto_participant_stage(3)
+                if _validate_participant_stage2():
+                    _goto_participant_stage(3)
 
     else:  # stage 3
         with st.form("form_participante_stage3", clear_on_submit=False):
@@ -780,43 +899,14 @@ with tab1:
             if volver_etapa:
                 _goto_participant_stage(2)
             elif guardar:
-                es_mayor = st.session_state.get("part_es_mayor_option") == "Sí"
-                doc_p = st.session_state.get("part_doc_p", "")
-                doc_a = st.session_state.get("part_doc_a", "")
-                nom_a = st.session_state.get("part_nom_a", "")
-                if st.session_state.get("part_conoce_rji") == "":
-                    st.error("Cuéntanos si conoces la RJI antes de guardar.")
-                elif not st.session_state.get("part_acepta_datos"):
-                    st.error("Debes aceptar el aviso de privacidad.")
-                elif not doc_p.strip().isdigit():
-                    st.error("El documento del participante debe contener solo dígitos.")
-                elif not st.session_state.get("part_tipo_doc_p"):
-                    st.error("Selecciona el tipo de documento del participante.")
-                elif not st.session_state.get("part_es_mayor_option"):
-                    st.error("Confírmanos si eres mayor de edad para continuar.")
-                elif (not es_mayor) and (not doc_a.strip().isdigit() or not nom_a.strip() or not st.session_state.get("part_tipo_doc_a")):
-                    st.error("Para menores, el documento y nombre del acudiente son obligatorios (solo dígitos en el documento).")
-                elif not st.session_state.get("part_nombres") or not st.session_state.get("part_apellidos"):
-                    st.error("Ingresa tus nombres y apellidos tal como aparecen en tu documento.")
-                elif not st.session_state.get("part_direccion"):
-                    st.error("Cuéntanos tu dirección de residencia.")
-                elif not st.session_state.get("part_region") or not st.session_state.get("part_ciudad"):
-                    st.error("Selecciona tu región y ciudad para continuar.")
-                elif not st.session_state.get("part_talla"):
-                    st.error("Selecciona tu talla de camiseta.")
-                elif not st.session_state.get("part_tel", "").strip():
-                    st.error("Déjanos tu número de contacto personal.")
-                elif not st.session_state.get("part_correo", "").strip():
-                    st.error("Incluye un correo de contacto personal.")
-                elif (not st.session_state.get("part_tipo_doc_a")) or (not doc_a.strip().isdigit()):
-                    st.error("El contacto debe tener tipo de documento y un número válido (solo dígitos).")
-                elif not nom_a.strip() or not st.session_state.get("part_ape_a", "").strip():
-                    st.error("Ingresa nombres y apellidos del contacto de emergencia.")
-                elif not st.session_state.get("part_tel_a", "").strip():
-                    st.error("Incluye el teléfono del contacto de emergencia.")
-                elif not st.session_state.get("part_parentesco_a"):
-                    st.error("Selecciona el parentesco o vínculo del contacto de emergencia.")
+                if not _validate_participant_stage3():
+                    pass
                 else:
+                    es_mayor = st.session_state.get("part_es_mayor_option") == "Sí"
+                    doc_p = st.session_state.get("part_doc_p", "").strip()
+                    doc_a = st.session_state.get("part_doc_a", "").strip()
+                    nom_a = st.session_state.get("part_nom_a", "")
+
                     ts = datetime.now().isoformat(timespec="seconds")
                     intereses = st.session_state.get("part_intereses", [])
                     conoce_map = {"Sí": "Si", "No": "No", "Más o menos": "Mas o menos", "": ""}
@@ -841,13 +931,13 @@ with tab1:
                     contacto_doc_url = ""
                     if st.session_state.get("part_doc_id_bytes") and st.session_state.get("part_doc_id_name"):
                         uploads_dir.mkdir(exist_ok=True)
-                        participante_path = uploads_dir / f"{doc_p.strip()}_{st.session_state['part_doc_id_name']}"
+                        participante_path = uploads_dir / f"{doc_p}_{st.session_state['part_doc_id_name']}"
                         with open(participante_path, "wb") as f:
                             f.write(st.session_state["part_doc_id_bytes"])
                         participante_doc_url = str(participante_path)
                     if st.session_state.get("part_contact_doc_bytes") and st.session_state.get("part_contact_doc_name"):
                         uploads_dir.mkdir(exist_ok=True)
-                        contacto_path = uploads_dir / f"{doc_a.strip()}_{st.session_state['part_contact_doc_name']}"
+                        contacto_path = uploads_dir / f"{doc_a}_{st.session_state['part_contact_doc_name']}"
                         with open(contacto_path, "wb") as f:
                             f.write(st.session_state["part_contact_doc_bytes"])
                         contacto_doc_url = str(contacto_path)
@@ -860,7 +950,7 @@ with tab1:
                         ts,
                         "TRUE" if es_mayor else "FALSE",
                         st.session_state.get("part_tipo_doc_p", ""),
-                        doc_p.strip(),
+                        doc_p,
                         st.session_state.get("part_nombres", "").strip(),
                         st.session_state.get("part_apellidos", "").strip(),
                         full_name,
@@ -902,7 +992,7 @@ with tab1:
                         "TRUE" if st.session_state.get("part_acomp_ninguna") else "FALSE",
                         conoce_map.get(st.session_state.get("part_conoce_rji"), ""),
                         st.session_state.get("part_tipo_doc_a", ""),
-                        doc_a.strip(),
+                        doc_a,
                         nom_a.strip(),
                         st.session_state.get("part_ape_a", "").strip(),
                         st.session_state.get("part_tel_a", "").strip(),
