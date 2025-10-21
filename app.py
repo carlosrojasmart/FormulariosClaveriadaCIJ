@@ -24,8 +24,13 @@ if not hasattr(st, "experimental_rerun") and hasattr(st, "rerun"):
 # ===== CONFIG =====
 SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "").strip()
 BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
+SHEET_NAME = (st.secrets.get("SHEET_NAME") or "PARTICIPANTES").strip() or "PARTICIPANTES"
 UPLOADS_PUBLIC_BASE_URL = (st.secrets.get("UPLOADS_PUBLIC_BASE_URL") or "").strip()
-UPLOADS_DRIVE_FOLDER_ID = (st.secrets.get("UPLOADS_DRIVE_FOLDER_ID") or "").strip()
+UPLOADS_DRIVE_FOLDER_ID = (
+    st.secrets.get("UPLOADS_DRIVE_FOLDER_ID")
+    or st.secrets.get("DRIVE_FOLDER_ID")
+    or ""
+).strip()
 
 if not SPREADSHEET_ID:
     st.error("No se encontró el ID de la hoja de cálculo en st.secrets['SPREADSHEET_ID'].")
@@ -1393,7 +1398,7 @@ with tab1:
                         "TRUE" if acepta_whatsapp else "FALSE",
                     ]
                     try:
-                        append_row(SPREADSHEET_ID, "PARTICIPANTES", row, PARTICIPANTES_COLS)
+                        append_row(SPREADSHEET_ID, SHEET_NAME, row, PARTICIPANTES_COLS)
                         try:
                             update_unificado(SPREADSHEET_ID)
                         except Exception:
