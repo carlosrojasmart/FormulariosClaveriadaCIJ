@@ -2,16 +2,18 @@ from pathlib import Path
 import pandas as pd
 
 PARTICIPANTES_COLS = [
-    "timestamp","es_mayor_edad","tipo_documento_participante","documento_participante","nombre_completo",
-    "como_te_gusta_que_te_digan","telefono_celular","correo","fecha_nacimiento","edad_aprox","eps",
-    "restricciones_alimentarias","salud_mental","region","obra_institucion","proceso_juvenil",
-    "intereses_personales","experiencia_significativa","dato_freak","pregunta_para_conectar",
+    "timestamp","es_mayor_edad","tipo_documento_participante","documento_participante","nombres","apellidos",
+    "nombre_completo","como_te_gusta_que_te_digan","telefono_celular","correo","direccion","region","ciudad",
+    "fecha_nacimiento","edad_aprox","talla_camisa","eps","restricciones_alimentarias","salud_mental",
+    "obra_institucion","proceso_juvenil","intereses_personales","experiencia_significativa",
+    "hobby_o_dato_curioso","pregunta_para_conectar",
     "exp_servicio_rank","exp_peregrinaje_rank","exp_cultura_arte_rank","exp_espiritualidad_rank","exp_vocacion_rank","exp_incidencia_politica_rank",
-    "experiencia_top_calculada","perfil_cercania","motivo_experiencia_top","preguntas_frecuentes",
-    "ha_vivido_acompanamiento","acompanamiento_parcerxs","acompanamiento_familia","acompanamiento_mentoria",
-    "acompanamiento_espiritual","acompanamiento_emocional","acompanamiento_red_comunidad",
-    "conoce_rji","tipo_documento_acudiente","documento_acudiente","nombre_acudiente","correo_acudiente","telefono_acudiente",
-    "acepta_tratamiento_datos"
+    "experiencia_top_calculada","nivel_experticie","motivo_experiencia_top","preguntas_frecuentes",
+    "acompanamientos_marcados","acompanamiento_familia","acompanamiento_amigos","acompanamiento_escucha_activa",
+    "acompanamiento_mentoria","acompanamiento_espiritual","acompanamiento_red_comunitaria","acompanamiento_ninguna",
+    "conoce_rji","tipo_documento_contacto","documento_contacto","nombres_contacto","apellidos_contacto","telefono_contacto",
+    "correo_contacto","parentesco_contacto","archivo_doc_participante","archivo_doc_contacto",
+    "acepta_tratamiento_datos","acepta_whatsapp"
 ]
 
 ACOMPANANTES_COLS = [
@@ -91,7 +93,7 @@ def update_unificado(path: Path) -> int:
         docP = _normalize_doc(r.get("documento_participante",""))
         nombreP = r.get("nombre_completo","")
         esMayor = str(r.get("es_mayor_edad","")).lower() in ["true","si","sí"]
-        docAcDecl = _normalize_doc(r.get("documento_acudiente",""))
+        docAcDecl = _normalize_doc(r.get("documento_contacto",""))
         matchAcud = "NO_APLICA"
         docAReal = ""
         nomAReal = ""
