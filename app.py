@@ -17,10 +17,18 @@ from docx import Document
 from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+# Compatibilidad para versiones recientes de Streamlit donde experimental_rerun fue removido
+if not hasattr(st, "experimental_rerun") and hasattr(st, "rerun"):
+    st.experimental_rerun = st.rerun  # type: ignore[attr-defined]
+
 # ===== CONFIG =====
-SPREADSHEET_ID = (
-    st.secrets.get("SPREADSHEET_ID")
-    or (st.secrets.get("gspread", {}) or {}).get("spreadsheet_id")
+SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "").strip()
+BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
+SHEET_NAME = (st.secrets.get("SHEET_NAME") or "PARTICIPANTES").strip() or "PARTICIPANTES"
+UPLOADS_PUBLIC_BASE_URL = (st.secrets.get("UPLOADS_PUBLIC_BASE_URL") or "").strip()
+UPLOADS_DRIVE_FOLDER_ID = (
+    st.secrets.get("UPLOADS_DRIVE_FOLDER_ID")
+    or st.secrets.get("DRIVE_FOLDER_ID")
     or ""
 ).strip()
 BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
@@ -769,12 +777,12 @@ with tab1:
             elif st.session_state.get("part_doc_id_name"):
                 st.caption(f"Archivo guardado: {st.session_state.get('part_doc_id_name')}")
 
-            st.text_input("Nombres", placeholder="Como aparecen en tu documento", key="part_nombres")
-            st.text_input("Apellidos", placeholder="Como aparecen en tu documento", key="part_apellidos")
-            st.text_input("¿Cómo te gusta que te digan?", placeholder="Opcional", key="part_apodo")
-            st.text_input("Teléfono celular", placeholder="+57 ...", key="part_tel")
-            st.text_input("Correo", placeholder="tu@correo.com", key="part_correo")
-            st.text_input("Dirección de residencia", placeholder="Barrio, calle, número", key="part_direccion")
+            nombres = st.text_input("Nombres", placeholder="Como aparecen en tu documento", key="part_nombres")
+            apellidos = st.text_input("Apellidos", placeholder="Como aparecen en tu documento", key="part_apellidos")
+            apodo = st.text_input("¿Cómo te gusta que te digan?", placeholder="Opcional", key="part_apodo")
+            telefono = st.text_input("Teléfono celular", placeholder="+57 ...", key="part_tel")
+            correo = st.text_input("Correo", placeholder="tu@correo.com", key="part_correo")
+            direccion = st.text_input("Dirección de residencia", placeholder="Barrio, calle, número", key="part_direccion")
 
             col_reg, col_ciudad = st.columns(2)
             region_options = [""] + COLOMBIA_DEPARTAMENTOS
@@ -818,13 +826,13 @@ with tab1:
                 format_func=lambda val: "Selecciona tu talla" if val == "" else val,
             )
 
-            st.text_input("EPS", placeholder="Escribe tu EPS", key="part_eps")
-            st.text_input(
+            eps = st.text_input("EPS", placeholder="Escribe tu EPS", key="part_eps")
+            rest_alim = st.text_input(
                 "Restricciones alimentarias (o 'ninguna')",
                 placeholder="Vegetariano, alergias, etc.",
                 key="part_rest_alim"
             )
-            st.text_area(
+            salud = st.text_area(
                 "Complicaciones/alertas de salud (solo lo necesario para cuidarte mejor)",
                 key="part_salud_mental"
             )
@@ -851,7 +859,7 @@ with tab1:
             else:
                 st.session_state.part_obra = obra_sel
 
-            st.text_input(
+            proceso = st.text_input(
                 "¿Perteneces a algún proceso juvenil? ¿Cuál?",
                 placeholder="Nombre del proceso",
                 key="part_proceso"
