@@ -3,12 +3,13 @@ import pandas as pd
 import copy
 import re
 import unicodedata
+import hashlib
 from pathlib import Path
 from datetime import datetime, date
 from urllib.parse import urljoin, quote
 from utils import (
     ensure_excel_with_sheets, append_row, update_unificado,
-    PARTICIPANTES_COLS,
+    PARTICIPANTES_COLS, upload_file_to_drive,
 )
 
 # Word para el documento de autorización en blanco
@@ -24,6 +25,7 @@ if not hasattr(st, "experimental_rerun") and hasattr(st, "rerun"):
 SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "").strip()
 BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
 UPLOADS_PUBLIC_BASE_URL = (st.secrets.get("UPLOADS_PUBLIC_BASE_URL") or "").strip()
+UPLOADS_DRIVE_FOLDER_ID = (st.secrets.get("UPLOADS_DRIVE_FOLDER_ID") or "").strip()
 
 if not SPREADSHEET_ID:
     st.error("No se encontró el ID de la hoja de cálculo en st.secrets['SPREADSHEET_ID'].")
@@ -212,14 +214,21 @@ def _format_phone_for_sheet(value: str) -> str:
     return f"'{value}"
 
 
-def _format_upload_for_sheet(path_value: str) -> str:
+def _format_upload_for_sheet(path_value: str, display_name: str = "") -> str:
     """Return a Sheets-friendly value (hyperlink when possible) for uploaded files."""
     if not path_value:
         return ""
 
     path_value = str(path_value)
-    filename = Path(path_value).name or "Archivo"
+    if path_value.startswith("="):
+        return path_value
+
+    filename = display_name or Path(path_value).name or "Archivo"
     safe_label = filename.replace('"', '""')
+
+    if path_value.startswith(("http://", "https://")):
+        url = path_value.replace('"', "%22")
+        return f'=HYPERLINK("{url}", "{safe_label}")'
 
     public_base = UPLOADS_PUBLIC_BASE_URL.rstrip("/")
     if public_base:
@@ -420,6 +429,10 @@ def _reset_participant_state():
         "exp_sort",
         "part_doc_archivo",
         "part_contact_doc",
+        "_part_doc_drive_hash",
+        "_part_doc_drive_link",
+        "_contact_doc_drive_hash",
+        "_contact_doc_drive_link",
     ):
         st.session_state.pop(transient_key, None)
 
@@ -1132,20 +1145,62 @@ with tab1:
                     payload["es_mayor_edad"] = es_mayor
 
                     uploads_dir = Path("uploads")
-                    participante_doc_url = ""
-                    contacto_doc_url = ""
+                    participante_doc_url = payload.get("archivo_doc_participante", "")
+                    contacto_doc_url = payload.get("archivo_doc_contacto", "")
+                    participante_label = payload.get("archivo_doc_participante_label", "")
+                    contacto_label = payload.get("archivo_doc_contacto_label", "")
+
                     if st.session_state.get("part_doc_id_bytes") and st.session_state.get("part_doc_id_name"):
                         uploads_dir.mkdir(exist_ok=True)
-                        participante_path = uploads_dir / f"{doc_p}_{st.session_state['part_doc_id_name']}"
+                        participante_filename = f"{doc_p}_{st.session_state['part_doc_id_name']}"
+                        participante_path = uploads_dir / participante_filename
                         with open(participante_path, "wb") as f:
                             f.write(st.session_state["part_doc_id_bytes"])
-                        participante_doc_url = str(participante_path)
+                        participante_label = participante_path.name
+                        drive_link = ""
+                        hasher = hashlib.sha256()
+                        hasher.update(st.session_state["part_doc_id_bytes"])
+                        hasher.update(f"|{UPLOADS_DRIVE_FOLDER_ID}".encode("utf-8"))
+                        part_hash = hasher.hexdigest()
+                        cached_hash = st.session_state.get("_part_doc_drive_hash")
+                        cached_link = st.session_state.get("_part_doc_drive_link")
+                        if cached_hash == part_hash and cached_link:
+                            drive_link = cached_link
+                        else:
+                            drive_link = upload_file_to_drive(participante_path, UPLOADS_DRIVE_FOLDER_ID)
+                            if drive_link:
+                                st.session_state["_part_doc_drive_hash"] = part_hash
+                                st.session_state["_part_doc_drive_link"] = drive_link
+                        if drive_link:
+                            participante_doc_url = drive_link
+                        else:
+                            participante_doc_url = str(participante_path)
+
                     if st.session_state.get("part_contact_doc_bytes") and st.session_state.get("part_contact_doc_name"):
                         uploads_dir.mkdir(exist_ok=True)
-                        contacto_path = uploads_dir / f"{doc_a}_{st.session_state['part_contact_doc_name']}"
+                        contacto_filename = f"{doc_a}_{st.session_state['part_contact_doc_name']}"
+                        contacto_path = uploads_dir / contacto_filename
                         with open(contacto_path, "wb") as f:
                             f.write(st.session_state["part_contact_doc_bytes"])
-                        contacto_doc_url = str(contacto_path)
+                        contacto_label = contacto_path.name
+                        drive_link = ""
+                        contact_hasher = hashlib.sha256()
+                        contact_hasher.update(st.session_state["part_contact_doc_bytes"])
+                        contact_hasher.update(f"|{UPLOADS_DRIVE_FOLDER_ID}".encode("utf-8"))
+                        contact_hash = contact_hasher.hexdigest()
+                        cached_hash = st.session_state.get("_contact_doc_drive_hash")
+                        cached_link = st.session_state.get("_contact_doc_drive_link")
+                        if cached_hash == contact_hash and cached_link:
+                            drive_link = cached_link
+                        else:
+                            drive_link = upload_file_to_drive(contacto_path, UPLOADS_DRIVE_FOLDER_ID)
+                            if drive_link:
+                                st.session_state["_contact_doc_drive_hash"] = contact_hash
+                                st.session_state["_contact_doc_drive_link"] = drive_link
+                        if drive_link:
+                            contacto_doc_url = drive_link
+                        else:
+                            contacto_doc_url = str(contacto_path)
 
                     nombres_val = _capture_field("nombres", st.session_state.get("part_nombres", ""))
                     apellidos_val = _capture_field("apellidos", st.session_state.get("part_apellidos", ""))
@@ -1251,17 +1306,33 @@ with tab1:
                     payload["acepta_whatsapp"] = acepta_whatsapp
                     payload["experiencia_top_calculada"] = experiencia_top
                     payload["nivel_experticie"] = perfil_cerc
-                    payload["archivo_doc_participante"] = participante_doc_url
-                    payload["archivo_doc_contacto"] = contacto_doc_url
+                    if participante_doc_url:
+                        payload["archivo_doc_participante"] = participante_doc_url
+                    elif "archivo_doc_participante" not in payload:
+                        payload["archivo_doc_participante"] = ""
+                    if participante_label:
+                        payload["archivo_doc_participante_label"] = participante_label
+                    elif "archivo_doc_participante_label" not in payload:
+                        payload["archivo_doc_participante_label"] = ""
+                    if contacto_doc_url:
+                        payload["archivo_doc_contacto"] = contacto_doc_url
+                    elif "archivo_doc_contacto" not in payload:
+                        payload["archivo_doc_contacto"] = ""
+                    if contacto_label:
+                        payload["archivo_doc_contacto_label"] = contacto_label
+                    elif "archivo_doc_contacto_label" not in payload:
+                        payload["archivo_doc_contacto_label"] = ""
 
                     full_name = f"{nombres_val} {apellidos_val}".strip()
                     edad_aprox = calcular_edad(payload.get("fecha_nacimiento"))
                     intereses_text = ", ".join(intereses_payload or [])
                     participante_doc_cell = _format_upload_for_sheet(
-                        payload.get("archivo_doc_participante", participante_doc_url)
+                        payload.get("archivo_doc_participante", participante_doc_url),
+                        payload.get("archivo_doc_participante_label", participante_label),
                     )
                     contacto_doc_cell = _format_upload_for_sheet(
-                        payload.get("archivo_doc_contacto", contacto_doc_url)
+                        payload.get("archivo_doc_contacto", contacto_doc_url),
+                        payload.get("archivo_doc_contacto_label", contacto_label),
                     )
 
                     row = [
