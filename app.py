@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import copy
+import re
+import unicodedata
 from pathlib import Path
 from datetime import datetime, date
 from utils import (
@@ -173,6 +175,17 @@ def calcular_edad(fecha_str):
         return today.year - d.year - ((today.month, today.day) < (d.month, d.day))
     except Exception:
         return ""
+
+
+def _clean_string(value: object) -> str:
+    """Return a normalized string suitable for storage without mutating widgets."""
+    if not isinstance(value, str):
+        return ""
+    normalized = unicodedata.normalize("NFKC", value)
+    normalized = normalized.strip()
+    # Collapse any internal whitespace runs to a single space
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
 
 COLOMBIA_DEPARTAMENTOS = [
     "Amazonas", "Antioquia", "Arauca", "Atlántico", "Bogotá D.C.", "Bolívar", "Boyacá", "Caldas",
@@ -994,6 +1007,29 @@ with tab1:
 
                     nombres_val = _clean_string(st.session_state.get("part_nombres", ""))
                     apellidos_val = _clean_string(st.session_state.get("part_apellidos", ""))
+                    apodo_val = _clean_string(st.session_state.get("part_apodo", ""))
+                    direccion_val = _clean_string(st.session_state.get("part_direccion", ""))
+                    correo_val = _clean_string(st.session_state.get("part_correo", ""))
+                    tel_val = _clean_string(st.session_state.get("part_tel", ""))
+                    region_val = _clean_string(st.session_state.get("part_region", ""))
+                    ciudad_val = _clean_string(st.session_state.get("part_ciudad", ""))
+                    eps_val = _clean_string(st.session_state.get("part_eps", ""))
+                    rest_alim_val = _clean_string(st.session_state.get("part_rest_alim", ""))
+                    salud_mental_val = _clean_string(st.session_state.get("part_salud_mental", ""))
+                    obra_val = _clean_string(st.session_state.get("part_obra", ""))
+                    proceso_val = _clean_string(st.session_state.get("part_proceso", ""))
+                    exp_sig_val = _clean_string(st.session_state.get("part_exp_sig", ""))
+                    dato_freak_val = _clean_string(st.session_state.get("part_dato_freak", ""))
+                    pregunta_val = _clean_string(st.session_state.get("part_pregunta", ""))
+                    motivo_val = _clean_string(st.session_state.get("part_motivo", ""))
+                    preguntas_frec_val = _clean_string(st.session_state.get("part_preguntas_frec", ""))
+
+                    nom_a_clean = _clean_string(nom_a)
+                    ape_a_clean = _clean_string(st.session_state.get("part_ape_a", ""))
+                    tel_a_clean = _clean_string(st.session_state.get("part_tel_a", ""))
+                    correo_a_clean = _clean_string(st.session_state.get("part_correo_a", ""))
+                    parentesco_clean = _clean_string(st.session_state.get("part_parentesco_a", ""))
+
                     full_name = f"{nombres_val} {apellidos_val}".strip()
                     edad_aprox = calcular_edad(st.session_state.get("part_fecha_nac"))
                     intereses_text = ", ".join(intereses)
@@ -1003,27 +1039,27 @@ with tab1:
                         "TRUE" if es_mayor else "FALSE",
                         st.session_state.get("part_tipo_doc_p", ""),
                         doc_p,
-                        st.session_state.get("part_nombres", "").strip(),
-                        st.session_state.get("part_apellidos", "").strip(),
+                        nombres_val,
+                        apellidos_val,
                         full_name,
-                        _clean_string(st.session_state.get("part_apodo", "")),
-                        tel_p,
-                        correo_p,
-                        direccion,
-                        st.session_state.get("part_region", "").strip(),
-                        st.session_state.get("part_ciudad", "").strip(),
+                        apodo_val,
+                        tel_val,
+                        correo_val,
+                        direccion_val,
+                        region_val,
+                        ciudad_val,
                         str(st.session_state.get("part_fecha_nac")),
                         edad_aprox,
                         st.session_state.get("part_talla", ""),
-                        eps,
-                        rest_alim,
-                        salud_val,
-                        _clean_string(st.session_state.get("part_obra", "")),
+                        eps_val,
+                        rest_alim_val,
+                        salud_mental_val,
+                        obra_val,
                         proceso_val,
                         intereses_text,
-                        _clean_string(st.session_state.get("part_exp_sig", "")),
-                        _clean_string(st.session_state.get("part_dato_freak", "")),
-                        _clean_string(st.session_state.get("part_pregunta", "")),
+                        exp_sig_val,
+                        dato_freak_val,
+                        pregunta_val,
                         int(ranks["Servicio"]),
                         int(ranks["Peregrinaje"]),
                         int(ranks["Cultura y arte"]),
@@ -1032,8 +1068,8 @@ with tab1:
                         int(ranks["Incidencia política"]),
                         experiencia_top,
                         perfil_cerc,
-                        _clean_string(st.session_state.get("part_motivo", "")),
-                        _clean_string(st.session_state.get("part_preguntas_frec", "")),
+                        motivo_val,
+                        preguntas_frec_val,
                         ", ".join(acomp_items),
                         "TRUE" if st.session_state.get("part_acomp_familia") else "FALSE",
                         "TRUE" if st.session_state.get("part_acomp_amigos") else "FALSE",
@@ -1045,11 +1081,11 @@ with tab1:
                         conoce_map.get(st.session_state.get("part_conoce_rji"), ""),
                         st.session_state.get("part_tipo_doc_a", ""),
                         doc_a,
-                        nom_a.strip(),
-                        st.session_state.get("part_ape_a", "").strip(),
-                        st.session_state.get("part_tel_a", "").strip(),
-                        st.session_state.get("part_correo_a", "").strip(),
-                        st.session_state.get("part_parentesco_a", "").strip(),
+                        nom_a_clean,
+                        ape_a_clean,
+                        tel_a_clean,
+                        correo_a_clean,
+                        parentesco_clean,
                         participante_doc_url,
                         contacto_doc_url,
                         "TRUE" if st.session_state.get("part_acepta_datos") else "FALSE",
