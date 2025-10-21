@@ -13,12 +13,12 @@ from docx import Document
 from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+# Compatibilidad para versiones recientes de Streamlit donde experimental_rerun fue removido
+if not hasattr(st, "experimental_rerun") and hasattr(st, "rerun"):
+    st.experimental_rerun = st.rerun  # type: ignore[attr-defined]
+
 # ===== CONFIG =====
-SPREADSHEET_ID = (
-    st.secrets.get("SPREADSHEET_ID")
-    or (st.secrets.get("gspread", {}) or {}).get("spreadsheet_id")
-    or ""
-).strip()
+SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "").strip()
 BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
 
 if not SPREADSHEET_ID:
@@ -279,7 +279,6 @@ PARTICIPANT_DEFAULTS = {
     "part_es_mayor_option": "",
     "part_tipo_doc_p": "",
     "part_doc_p": "",
-    "_clean_part_doc_p": "",
     "part_doc_id_name": "",
     "part_doc_id_bytes": b"",
     "part_nombres": "",
@@ -301,7 +300,6 @@ PARTICIPANT_DEFAULTS = {
     "part_proceso": "",
     "part_tipo_doc_a": "",
     "part_doc_a": "",
-    "_clean_part_doc_a": "",
     "part_contact_doc_name": "",
     "part_contact_doc_bytes": b"",
     "part_nom_a": "",
@@ -333,25 +331,6 @@ def _init_participant_state():
     for key, value in PARTICIPANT_DEFAULTS.items():
         if key not in st.session_state:
             st.session_state[key] = copy.deepcopy(value)
-
-
-def _reset_participant_state():
-    """Reset stored participant answers after a successful submission."""
-    for key, value in PARTICIPANT_DEFAULTS.items():
-        st.session_state[key] = copy.deepcopy(value)
-
-    # Clear transient helper caches so toggles and uploads start fresh.
-    for transient_key in (
-        "_prev_part_acomp_values",
-        "_prev_part_acomp_ninguna",
-        "part_exp_order",
-        "exp_sort",
-        "part_doc_archivo",
-        "part_contact_doc",
-    ):
-        st.session_state.pop(transient_key, None)
-
-    st.session_state.pop("_participant_reset_pending", None)
 
 
 def _participant_stage_fields(stage: int):
@@ -414,125 +393,17 @@ def _goto_participant_stage(stage: int):
     st.session_state.part_step = stage
 
 
-def _emit_stage_errors(messages, show: bool = True) -> bool:
-    if show:
-        for message in messages:
-            st.error(message)
-    return len(messages) == 0
+def _clean_string(value) -> str:
+    return value.strip() if isinstance(value, str) else ""
 
 
-def _normalize_numeric_input(value: str) -> tuple[bool, str]:
-    raw = (value or "").strip()
-    if not raw:
-        return False, ""
-    allowed = set("0123456789 .-")
-    if any(ch not in allowed for ch in raw):
-        return False, ""
-    digits = "".join(ch for ch in raw if ch.isdigit())
-    if not digits:
-        return False, ""
-    return True, digits
-
-
-def _validate_participant_stage1(show_errors: bool = True) -> bool:
-    errors = []
-    mayor_option = st.session_state.get("part_es_mayor_option", "")
-    if mayor_option not in {"Sí", "No"}:
-        errors.append("Confírmanos si eres mayor de edad para continuar.")
-
-    doc_ok, cleaned_doc = _normalize_numeric_input(st.session_state.get("part_doc_p", ""))
-    if doc_ok:
-        st.session_state["_clean_part_doc_p"] = cleaned_doc
-    else:
-        st.session_state["_clean_part_doc_p"] = ""
-        errors.append("El documento del participante debe contener solo dígitos.")
-
-    if not st.session_state.get("part_tipo_doc_p"):
-        errors.append("Selecciona el tipo de documento del participante.")
-
-    if not st.session_state.get("part_nombres", "").strip() or not st.session_state.get("part_apellidos", "").strip():
-        errors.append("Ingresa tus nombres y apellidos tal como aparecen en tu documento.")
-
-    if not st.session_state.get("part_direccion", "").strip():
-        errors.append("Cuéntanos tu dirección de residencia.")
-
-    if not st.session_state.get("part_region") or not st.session_state.get("part_ciudad"):
-        errors.append("Selecciona tu región y ciudad para continuar.")
-
-    if not st.session_state.get("part_talla"):
-        errors.append("Selecciona tu talla de camiseta.")
-
-    if not st.session_state.get("part_tel", "").strip():
-        errors.append("Déjanos tu número de contacto personal.")
-
-    if not st.session_state.get("part_correo", "").strip():
-        errors.append("Incluye un correo de contacto personal.")
-
-    doc_a_ok, cleaned_doc_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
-    tipo_doc_a = st.session_state.get("part_tipo_doc_a", "")
-    nom_a = st.session_state.get("part_nom_a", "").strip()
-    ape_a = st.session_state.get("part_ape_a", "").strip()
-    tel_a = st.session_state.get("part_tel_a", "").strip()
-    parentesco = st.session_state.get("part_parentesco_a", "")
-
-    contacto_doc_issue = not tipo_doc_a or not doc_a_ok
-    contacto_name_issue = not nom_a or not ape_a
-    es_menor = mayor_option == "No"
-    menores_reportado = False
-    if es_menor and (contacto_doc_issue or contacto_name_issue):
-        errors.append("Para menores, el documento y nombre del acudiente son obligatorios (solo dígitos en el documento).")
-        menores_reportado = True
-
-    if contacto_doc_issue and not menores_reportado:
-        errors.append("El contacto debe tener tipo de documento y un número válido (solo dígitos).")
-
-    if contacto_doc_issue:
-        st.session_state["_clean_part_doc_a"] = ""
-    else:
-        st.session_state["_clean_part_doc_a"] = cleaned_doc_a
-
-    if contacto_name_issue and not menores_reportado:
-        errors.append("Ingresa nombres y apellidos del contacto de emergencia.")
-
-    if not tel_a:
-        errors.append("Incluye el teléfono del contacto de emergencia.")
-
-    if not parentesco:
-        errors.append("Selecciona el parentesco o vínculo del contacto de emergencia.")
-
-    return _emit_stage_errors(errors, show_errors)
-
-
-def _validate_participant_stage2(show_errors: bool = True) -> bool:
-    errors = []
-    if not st.session_state.get("part_exp_sig", "").strip():
-        errors.append("Cuéntanos una experiencia juvenil significativa.")
-
-    intereses = st.session_state.get("part_intereses", [])
-    if not intereses:
-        errors.append("Selecciona al menos un interés personal (hasta 3).")
-
-    if not st.session_state.get("part_dato_freak", "").strip():
-        errors.append("Comparte un hobby o dato curioso para continuar.")
-
-    if not st.session_state.get("part_pregunta", "").strip():
-        errors.append("Propón una pregunta para conectar con otros participantes.")
-
-    return _emit_stage_errors(errors, show_errors)
-
-
-def _validate_participant_stage3(show_errors: bool = True) -> bool:
-    errors = []
-    if not st.session_state.get("part_motivo", "").strip():
-        errors.append("Cuéntanos por qué te interesa tu experiencia prioritaria.")
-
-    if st.session_state.get("part_conoce_rji") == "":
-        errors.append("Cuéntanos si conoces la RJI antes de guardar.")
-
-    if not st.session_state.get("part_acepta_datos"):
-        errors.append("Debes aceptar el aviso de privacidad.")
-
-    return _emit_stage_errors(errors, show_errors)
+def _clean_digits(value) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        value = str(value)
+    value = value.strip()
+    return "".join(ch for ch in value if ch.isdigit())
 
 
 def render_stage_progress(stage: int):
@@ -554,17 +425,10 @@ def render_stage_progress(stage: int):
     )
 
 
-if st.session_state.get("_participant_reset_pending"):
-    _reset_participant_state()
-
 _init_participant_state()
 
 # ================= PARTICIPANTE =================
 with tab1:
-    success_message = st.session_state.pop("_participant_success_message", "")
-    if success_message:
-        st.success(success_message)
-
     stage = st.session_state.part_step
     stage_titles = {
         1: "Etapa 1 · Datos personales",
@@ -581,15 +445,6 @@ with tab1:
     st.markdown(f"<div class='motivacion-box'>{motivaciones.get(stage, '')}</div>", unsafe_allow_html=True)
 
     experiencias = ["Servicio", "Peregrinaje", "Cultura y arte", "Espiritualidad", "Vocación", "Incidencia política"]
-
-    ACOMP_KEYS = [
-        "part_acomp_familia",
-        "part_acomp_amigos",
-        "part_acomp_escucha",
-        "part_acomp_mentoria",
-        "part_acomp_espiritual",
-        "part_acomp_red_comunidad",
-    ]
 
     if stage == 1:
         with st.form("form_participante_stage1", clear_on_submit=False):
@@ -612,7 +467,12 @@ with tab1:
                 index=doc_options.index(current_doc) if current_doc in doc_options else 0,
             )
             st.session_state.part_tipo_doc_p = "" if tipo_doc == doc_options[0] else tipo_doc
-            st.text_input("Número de documento (solo dígitos)", max_chars=20, placeholder="Ej: 1234567890", key="part_doc_p")
+            doc_num = st.text_input(
+                "Número de documento (solo dígitos)",
+                max_chars=20,
+                placeholder="Ej: 1234567890",
+                key="part_doc_p",
+            )
             doc_file = st.file_uploader(
                 "Adjunta copia del documento (PDF o imagen)",
                 type=["pdf", "png", "jpg", "jpeg"],
@@ -624,12 +484,12 @@ with tab1:
             elif st.session_state.get("part_doc_id_name"):
                 st.caption(f"Archivo guardado: {st.session_state.get('part_doc_id_name')}")
 
-            st.text_input("Nombres", placeholder="Como aparecen en tu documento", key="part_nombres")
-            st.text_input("Apellidos", placeholder="Como aparecen en tu documento", key="part_apellidos")
-            st.text_input("¿Cómo te gusta que te digan?", placeholder="Opcional", key="part_apodo")
-            st.text_input("Teléfono celular", placeholder="+57 ...", key="part_tel")
-            st.text_input("Correo", placeholder="tu@correo.com", key="part_correo")
-            st.text_input("Dirección de residencia", placeholder="Barrio, calle, número", key="part_direccion")
+            nombres = st.text_input("Nombres", placeholder="Como aparecen en tu documento", key="part_nombres")
+            apellidos = st.text_input("Apellidos", placeholder="Como aparecen en tu documento", key="part_apellidos")
+            apodo = st.text_input("¿Cómo te gusta que te digan?", placeholder="Opcional", key="part_apodo")
+            telefono = st.text_input("Teléfono celular", placeholder="+57 ...", key="part_tel")
+            correo = st.text_input("Correo", placeholder="tu@correo.com", key="part_correo")
+            direccion = st.text_input("Dirección de residencia", placeholder="Barrio, calle, número", key="part_direccion")
 
             col_reg, col_ciudad = st.columns(2)
             region_options = ["Selecciona la región / departamento"] + COLOMBIA_DEPARTAMENTOS
@@ -668,13 +528,13 @@ with tab1:
             )
             st.session_state.part_talla = "" if talla_sel == talla_options[0] else talla_sel
 
-            st.text_input("EPS", placeholder="Escribe tu EPS", key="part_eps")
-            st.text_input(
+            eps = st.text_input("EPS", placeholder="Escribe tu EPS", key="part_eps")
+            rest_alim = st.text_input(
                 "Restricciones alimentarias (o 'ninguna')",
                 placeholder="Vegetariano, alergias, etc.",
                 key="part_rest_alim"
             )
-            st.text_area(
+            salud = st.text_area(
                 "Complicaciones/alertas de salud (solo lo necesario para cuidarte mejor)",
                 key="part_salud_mental"
             )
@@ -703,7 +563,7 @@ with tab1:
             else:
                 st.session_state.part_obra = obra_sel
 
-            st.text_input(
+            proceso = st.text_input(
                 "¿Perteneces a algún proceso juvenil? ¿Cuál?",
                 placeholder="Nombre del proceso",
                 key="part_proceso"
@@ -719,16 +579,16 @@ with tab1:
                 index=doc_ac_options.index(current_doc_a) if current_doc_a in doc_ac_options else 0,
             )
             st.session_state.part_tipo_doc_a = "" if tipo_doc_a == doc_ac_options[0] else tipo_doc_a
-            st.text_input(
+            doc_contacto = st.text_input(
                 "Documento del contacto (solo dígitos)",
                 max_chars=20,
                 placeholder="Ej: 1012345678",
                 key="part_doc_a"
             )
-            st.text_input("Nombres del contacto", key="part_nom_a")
-            st.text_input("Apellidos del contacto", key="part_ape_a")
-            st.text_input("Teléfono del contacto", key="part_tel_a")
-            st.text_input("Correo del contacto (opcional)", key="part_correo_a")
+            nom_contacto = st.text_input("Nombres del contacto", key="part_nom_a")
+            ape_contacto = st.text_input("Apellidos del contacto", key="part_ape_a")
+            tel_contacto = st.text_input("Teléfono del contacto", key="part_tel_a")
+            correo_contacto = st.text_input("Correo del contacto (opcional)", key="part_correo_a")
             parentesco_opciones = ["Selecciona el parentesco"] + PARENTESCOS
             current_parentesco = st.session_state.get("part_parentesco_a", "")
             parentesco_idx = parentesco_opciones.index(current_parentesco) if current_parentesco in parentesco_opciones else 0
@@ -751,8 +611,23 @@ with tab1:
 
             avanzar = st.form_submit_button("Avanzar a intereses", use_container_width=True)
             if avanzar:
-                if _validate_participant_stage1():
-                    _goto_participant_stage(2)
+                st.session_state.part_doc_p = _clean_digits(doc_num)
+                st.session_state.part_nombres = _clean_string(nombres)
+                st.session_state.part_apellidos = _clean_string(apellidos)
+                st.session_state.part_apodo = _clean_string(apodo)
+                st.session_state.part_tel = _clean_string(telefono)
+                st.session_state.part_correo = _clean_string(correo)
+                st.session_state.part_direccion = _clean_string(direccion)
+                st.session_state.part_eps = _clean_string(eps)
+                st.session_state.part_rest_alim = _clean_string(rest_alim)
+                st.session_state.part_salud_mental = salud.strip() if isinstance(salud, str) else ""
+                st.session_state.part_proceso = _clean_string(proceso)
+                st.session_state.part_doc_a = _clean_digits(doc_contacto)
+                st.session_state.part_nom_a = _clean_string(nom_contacto)
+                st.session_state.part_ape_a = _clean_string(ape_contacto)
+                st.session_state.part_tel_a = _clean_string(tel_contacto)
+                st.session_state.part_correo_a = _clean_string(correo_contacto)
+                _goto_participant_stage(2)
 
     elif stage == 2:
         intereses_full = [
@@ -778,15 +653,12 @@ with tab1:
             st.text_input("Propón una pregunta para conectar con otros", key="part_pregunta")
 
             col1, col2 = st.columns(2)
-            with col1:
-                volver = st.form_submit_button("Retroceder", use_container_width=True)
-            with col2:
-                avanzar = st.form_submit_button("Avanzar a experiencias", use_container_width=True)
+            volver = col1.form_submit_button("Retroceder", use_container_width=True)
+            avanzar = col2.form_submit_button("Avanzar a experiencias", use_container_width=True)
             if volver:
                 _goto_participant_stage(1)
             elif avanzar:
-                if _validate_participant_stage2():
-                    _goto_participant_stage(3)
+                _goto_participant_stage(3)
 
     else:  # stage 3
         with st.form("form_participante_stage3", clear_on_submit=False):
@@ -859,45 +731,24 @@ with tab1:
             col_d, col_e, col_f = st.columns(3)
             col_a.checkbox("Familia", key="part_acomp_familia")
             col_b.checkbox("Amigos", key="part_acomp_amigos")
-            col_c.checkbox(
-                "Escucha activa / apoyo emocional",
-                key="part_acomp_escucha",
-            )
+            col_c.checkbox("Escucha activa / apoyo emocional", key="part_acomp_escucha")
             col_d.checkbox("Mentoría o tutoría", key="part_acomp_mentoria")
             col_e.checkbox("Acompañamiento espiritual", key="part_acomp_espiritual")
-            col_f.checkbox(
-                "Red comunitaria o institucional",
-                key="part_acomp_red_comunidad",
-            )
+            col_f.checkbox("Red comunitaria o institucional", key="part_acomp_red_comunidad")
             st.checkbox("Ninguna por ahora", key="part_acomp_ninguna")
 
-            current_none = bool(st.session_state.get("part_acomp_ninguna"))
-            current_values = {
-                key: bool(st.session_state.get(key))
-                for key in ACOMP_KEYS
-            }
-            prev_values = st.session_state.get("_prev_part_acomp_values")
-            prev_none = st.session_state.get("_prev_part_acomp_ninguna")
-
-            none_toggled_on = current_none and not bool(prev_none)
-            if prev_values is None:
-                toggled_other_keys = [key for key, val in current_values.items() if val]
-            else:
-                toggled_other_keys = [
-                    key
-                    for key, val in current_values.items()
-                    if val and not bool(prev_values.get(key))
-                ]
-
-            if none_toggled_on:
-                for key in ACOMP_KEYS:
-                    if st.session_state.get(key):
-                        st.session_state[key] = False
-            elif toggled_other_keys and current_none:
-                st.session_state["part_acomp_ninguna"] = False
-
-            st.session_state["_prev_part_acomp_values"] = current_values
-            st.session_state["_prev_part_acomp_ninguna"] = current_none
+            if st.session_state.get("part_acomp_ninguna"):
+                for acomp_key in ["part_acomp_familia", "part_acomp_amigos", "part_acomp_escucha", "part_acomp_mentoria", "part_acomp_espiritual", "part_acomp_red_comunidad"]:
+                    st.session_state[acomp_key] = False
+            elif any([
+                st.session_state.get("part_acomp_familia"),
+                st.session_state.get("part_acomp_amigos"),
+                st.session_state.get("part_acomp_escucha"),
+                st.session_state.get("part_acomp_mentoria"),
+                st.session_state.get("part_acomp_espiritual"),
+                st.session_state.get("part_acomp_red_comunidad"),
+            ]):
+                st.session_state.part_acomp_ninguna = False
 
             conoce_opciones = ["Sí", "No", "Más o menos"]
             conoce_val = st.session_state.get("part_conoce_rji", "")
@@ -924,30 +775,48 @@ with tab1:
             )
 
             col_back, col_save = st.columns(2)
-            with col_back:
-                volver_etapa = st.form_submit_button("Retroceder", use_container_width=True)
-            with col_save:
-                guardar = st.form_submit_button("Guardar participante", use_container_width=True)
+            volver_etapa = col_back.form_submit_button("Retroceder", use_container_width=True)
+            guardar = col_save.form_submit_button("Guardar participante", use_container_width=True)
             if volver_etapa:
                 _goto_participant_stage(2)
             elif guardar:
-                if not _validate_participant_stage3():
-                    pass
+                es_mayor = st.session_state.get("part_es_mayor_option") == "Sí"
+                doc_p = st.session_state.get("part_doc_p", "")
+                doc_a = st.session_state.get("part_doc_a", "")
+                nom_a = st.session_state.get("part_nom_a", "")
+                if st.session_state.get("part_conoce_rji") == "":
+                    st.error("Cuéntanos si conoces la RJI antes de guardar.")
+                elif not st.session_state.get("part_acepta_datos"):
+                    st.error("Debes aceptar el aviso de privacidad.")
+                elif not doc_p.strip().isdigit():
+                    st.error("El documento del participante debe contener solo dígitos.")
+                elif not st.session_state.get("part_tipo_doc_p"):
+                    st.error("Selecciona el tipo de documento del participante.")
+                elif not st.session_state.get("part_es_mayor_option"):
+                    st.error("Confírmanos si eres mayor de edad para continuar.")
+                elif (not es_mayor) and (not doc_a.strip().isdigit() or not nom_a.strip() or not st.session_state.get("part_tipo_doc_a")):
+                    st.error("Para menores, el documento y nombre del acudiente son obligatorios (solo dígitos en el documento).")
+                elif not st.session_state.get("part_nombres") or not st.session_state.get("part_apellidos"):
+                    st.error("Ingresa tus nombres y apellidos tal como aparecen en tu documento.")
+                elif not st.session_state.get("part_direccion"):
+                    st.error("Cuéntanos tu dirección de residencia.")
+                elif not st.session_state.get("part_region") or not st.session_state.get("part_ciudad"):
+                    st.error("Selecciona tu región y ciudad para continuar.")
+                elif not st.session_state.get("part_talla"):
+                    st.error("Selecciona tu talla de camiseta.")
+                elif not st.session_state.get("part_tel", "").strip():
+                    st.error("Déjanos tu número de contacto personal.")
+                elif not st.session_state.get("part_correo", "").strip():
+                    st.error("Incluye un correo de contacto personal.")
+                elif (not st.session_state.get("part_tipo_doc_a")) or (not doc_a.strip().isdigit()):
+                    st.error("El contacto debe tener tipo de documento y un número válido (solo dígitos).")
+                elif not nom_a.strip() or not st.session_state.get("part_ape_a", "").strip():
+                    st.error("Ingresa nombres y apellidos del contacto de emergencia.")
+                elif not st.session_state.get("part_tel_a", "").strip():
+                    st.error("Incluye el teléfono del contacto de emergencia.")
+                elif not st.session_state.get("part_parentesco_a"):
+                    st.error("Selecciona el parentesco o vínculo del contacto de emergencia.")
                 else:
-                    es_mayor = st.session_state.get("part_es_mayor_option") == "Sí"
-                    doc_p_clean = st.session_state.get("_clean_part_doc_p", "").strip()
-                    if not doc_p_clean:
-                        doc_ok, normalized = _normalize_numeric_input(st.session_state.get("part_doc_p", ""))
-                        doc_p_clean = normalized if doc_ok else st.session_state.get("part_doc_p", "").strip()
-                    doc_p = doc_p_clean
-
-                    doc_a_clean = st.session_state.get("_clean_part_doc_a", "").strip()
-                    if not doc_a_clean:
-                        doc_a_ok, normalized_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
-                        doc_a_clean = normalized_a if doc_a_ok else st.session_state.get("part_doc_a", "").strip()
-                    doc_a = doc_a_clean
-                    nom_a = st.session_state.get("part_nom_a", "")
-
                     ts = datetime.now().isoformat(timespec="seconds")
                     intereses = st.session_state.get("part_intereses", [])
                     conoce_map = {"Sí": "Si", "No": "No", "Más o menos": "Mas o menos", "": ""}
@@ -972,13 +841,13 @@ with tab1:
                     contacto_doc_url = ""
                     if st.session_state.get("part_doc_id_bytes") and st.session_state.get("part_doc_id_name"):
                         uploads_dir.mkdir(exist_ok=True)
-                        participante_path = uploads_dir / f"{doc_p}_{st.session_state['part_doc_id_name']}"
+                        participante_path = uploads_dir / f"{doc_p.strip()}_{st.session_state['part_doc_id_name']}"
                         with open(participante_path, "wb") as f:
                             f.write(st.session_state["part_doc_id_bytes"])
                         participante_doc_url = str(participante_path)
                     if st.session_state.get("part_contact_doc_bytes") and st.session_state.get("part_contact_doc_name"):
                         uploads_dir.mkdir(exist_ok=True)
-                        contacto_path = uploads_dir / f"{doc_a}_{st.session_state['part_contact_doc_name']}"
+                        contacto_path = uploads_dir / f"{doc_a.strip()}_{st.session_state['part_contact_doc_name']}"
                         with open(contacto_path, "wb") as f:
                             f.write(st.session_state["part_contact_doc_bytes"])
                         contacto_doc_url = str(contacto_path)
@@ -991,7 +860,7 @@ with tab1:
                         ts,
                         "TRUE" if es_mayor else "FALSE",
                         st.session_state.get("part_tipo_doc_p", ""),
-                        doc_p,
+                        doc_p.strip(),
                         st.session_state.get("part_nombres", "").strip(),
                         st.session_state.get("part_apellidos", "").strip(),
                         full_name,
@@ -1033,7 +902,7 @@ with tab1:
                         "TRUE" if st.session_state.get("part_acomp_ninguna") else "FALSE",
                         conoce_map.get(st.session_state.get("part_conoce_rji"), ""),
                         st.session_state.get("part_tipo_doc_a", ""),
-                        doc_a,
+                        doc_a.strip(),
                         nom_a.strip(),
                         st.session_state.get("part_ape_a", "").strip(),
                         st.session_state.get("part_tel_a", "").strip(),
@@ -1050,9 +919,12 @@ with tab1:
                             update_unificado(SPREADSHEET_ID)
                         except Exception:
                             pass
-                        st.session_state["_participant_success_message"] = "¡Tu registro quedó guardado! Gracias por llegar al final ✨"
-                        st.session_state["_participant_reset_pending"] = True
-                        st.experimental_rerun()
+                        st.success("¡Tu registro quedó guardado! Gracias por llegar al final ✨")
+                        for key, value in PARTICIPANT_DEFAULTS.items():
+                            st.session_state[key] = copy.deepcopy(value)
+                        st.session_state.pop("exp_sort", None)
+                        st.session_state.pop("part_doc_archivo", None)
+                        st.session_state.pop("part_contact_doc", None)
                     except Exception as e:
                         st.error(f"No se pudo guardar: {e}")
 
