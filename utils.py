@@ -1,12 +1,18 @@
 from typing import List
 import re
 import textwrap
+import json
+import mimetypes
+import uuid
+from pathlib import Path
+import io
 
 import gspread
 import pandas as pd
 import streamlit as st
 from gspread.exceptions import WorksheetNotFound
 from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import AuthorizedSession
 
 PARTICIPANTES_COLS = [
     "timestamp","es_mayor_edad","tipo_documento_participante","documento_participante","nombres","apellidos",
@@ -37,7 +43,10 @@ UNIFICADO_COLS = [
     "consentimiento_lista_contiene_doc_participante","observaciones"
 ]
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.file",
+]
 
 
 def _normalize_private_key(info: dict) -> dict:
@@ -79,12 +88,18 @@ def _normalize_private_key(info: dict) -> dict:
 
 
 @st.cache_resource(show_spinner=False)
-def _get_gspread_client():
+def _get_google_credentials():
     credentials_info = st.secrets.get("gcp_service_account")
     if not credentials_info:
         raise RuntimeError("No se encontraron las credenciales de Google en st.secrets['gcp_service_account'].")
     normalized_info = _normalize_private_key(credentials_info)
     credentials = Credentials.from_service_account_info(normalized_info, scopes=SCOPES)
+    return credentials
+
+
+@st.cache_resource(show_spinner=False)
+def _get_gspread_client():
+    credentials = _get_google_credentials()
     return gspread.authorize(credentials)
 
 
@@ -159,6 +174,65 @@ def append_row(spreadsheet_id: str, sheet: str, row: list, expected_cols: list):
     ws = _ensure_worksheet(sh, sheet, expected_cols)
     prepared = [_stringify_cell(row[i]) if i < len(row) else "" for i in range(len(expected_cols))]
     ws.append_row(prepared, value_input_option="USER_ENTERED")
+
+
+def upload_file_to_drive(local_path: Path, folder_id: str = "") -> str:
+    """Upload a file to Drive and return a shareable link."""
+    if not isinstance(local_path, Path):
+        local_path = Path(str(local_path))
+
+    if not local_path.exists():
+        return ""
+
+    try:
+        credentials = _get_google_credentials()
+    except RuntimeError:
+        return ""
+
+    session = AuthorizedSession(credentials)
+
+    metadata = {"name": local_path.name}
+    cleaned_folder = (folder_id or "").strip()
+    if cleaned_folder:
+        metadata["parents"] = [cleaned_folder]
+
+    mime_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
+    boundary = f"===============driveupload=={uuid.uuid4().hex}=="
+
+    body = io.BytesIO()
+    body.write(f"--{boundary}\r\n".encode("utf-8"))
+    body.write(b"Content-Type: application/json; charset=UTF-8\r\n\r\n")
+    body.write(json.dumps(metadata).encode("utf-8"))
+    body.write(b"\r\n")
+    body.write(f"--{boundary}\r\n".encode("utf-8"))
+    body.write(f"Content-Type: {mime_type}\r\n\r\n".encode("utf-8"))
+    body.write(local_path.read_bytes())
+    body.write(b"\r\n")
+    body.write(f"--{boundary}--".encode("utf-8"))
+    body.seek(0)
+
+    headers = {"Content-Type": f"multipart/related; boundary={boundary}"}
+    upload_url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
+
+    response = session.post(upload_url, headers=headers, data=body.getvalue())
+    if response.status_code not in (200, 201):
+        return ""
+
+    payload = response.json() if response.content else {}
+    file_id = payload.get("id")
+    if not file_id:
+        return ""
+
+    try:
+        session.post(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
+            params={"sendNotificationEmail": "false"},
+            json={"role": "reader", "type": "anyone"},
+        )
+    except Exception:
+        pass
+
+    return f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
 
 
 def get_sheet_as_dataframe(spreadsheet_id: str, sheet: str, expected_cols: list) -> pd.DataFrame:
