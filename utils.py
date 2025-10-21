@@ -38,12 +38,22 @@ UNIFICADO_COLS = [
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
+def _normalize_private_key(info: dict) -> dict:
+    """Devuelve una copia del diccionario con la clave privada formateada correctamente."""
+    cleaned = dict(info) if info is not None else {}
+    private_key = cleaned.get("private_key")
+    if isinstance(private_key, str) and "BEGIN PRIVATE KEY" in private_key:
+        cleaned["private_key"] = private_key.replace("\\n", "\n")
+    return cleaned
+
+
 @st.cache_resource(show_spinner=False)
 def _get_gspread_client():
     credentials_info = st.secrets.get("gcp_service_account")
     if not credentials_info:
         raise RuntimeError("No se encontraron las credenciales de Google en st.secrets['gcp_service_account'].")
-    credentials = Credentials.from_service_account_info(credentials_info, scopes=SCOPES)
+    normalized_info = _normalize_private_key(credentials_info)
+    credentials = Credentials.from_service_account_info(normalized_info, scopes=SCOPES)
     return gspread.authorize(credentials)
 
 

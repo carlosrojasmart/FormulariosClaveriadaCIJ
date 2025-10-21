@@ -8,6 +8,14 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
+
+def _normalize_private_key(info: dict) -> dict:
+    cleaned = dict(info) if info is not None else {}
+    pk = cleaned.get("private_key")
+    if isinstance(pk, str) and "BEGIN PRIVATE KEY" in pk:
+        cleaned["private_key"] = pk.replace("\\n", "\n")
+    return cleaned
+
 # ====== CONFIGURA AQUÍ ======
 INFO_EVENTO = {
     "nombre": "Claveriada RJI",
@@ -235,7 +243,7 @@ def generar_desde_google_sheet(
     """
     scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
     if credentials_info:
-        creds = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+        creds = Credentials.from_service_account_info(_normalize_private_key(credentials_info), scopes=scopes)
     elif credentials_json_path:
         creds = Credentials.from_service_account_file(credentials_json_path, scopes=scopes)
     else:
