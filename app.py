@@ -442,14 +442,6 @@ with tab1:
         "part_acomp_red_comunidad",
     ]
 
-    def _clear_acomp_when_none_selected():
-        for acomp_key in ACOMP_KEYS:
-            st.session_state[acomp_key] = False
-
-    def _unset_none_if_other_selected():
-        if st.session_state.get("part_acomp_ninguna"):
-            st.session_state["part_acomp_ninguna"] = False
-
     if stage == 1:
         with st.form("form_participante_stage1", clear_on_submit=False):
             st.subheader("Información básica")
@@ -714,41 +706,47 @@ with tab1:
             st.caption("Durante el encuentro de Claveriado 2026 tendremos distintas actividades de acompañamiento. Marca los acompañamientos con los que cuentas o quisieras fortalecer.")
             col_a, col_b, col_c = st.columns(3)
             col_d, col_e, col_f = st.columns(3)
-            col_a.checkbox(
-                "Familia",
-                key="part_acomp_familia",
-                on_change=_unset_none_if_other_selected,
-            )
-            col_b.checkbox(
-                "Amigos",
-                key="part_acomp_amigos",
-                on_change=_unset_none_if_other_selected,
-            )
+            col_a.checkbox("Familia", key="part_acomp_familia")
+            col_b.checkbox("Amigos", key="part_acomp_amigos")
             col_c.checkbox(
                 "Escucha activa / apoyo emocional",
                 key="part_acomp_escucha",
-                on_change=_unset_none_if_other_selected,
             )
-            col_d.checkbox(
-                "Mentoría o tutoría",
-                key="part_acomp_mentoria",
-                on_change=_unset_none_if_other_selected,
-            )
-            col_e.checkbox(
-                "Acompañamiento espiritual",
-                key="part_acomp_espiritual",
-                on_change=_unset_none_if_other_selected,
-            )
+            col_d.checkbox("Mentoría o tutoría", key="part_acomp_mentoria")
+            col_e.checkbox("Acompañamiento espiritual", key="part_acomp_espiritual")
             col_f.checkbox(
                 "Red comunitaria o institucional",
                 key="part_acomp_red_comunidad",
-                on_change=_unset_none_if_other_selected,
             )
-            st.checkbox(
-                "Ninguna por ahora",
-                key="part_acomp_ninguna",
-                on_change=_clear_acomp_when_none_selected,
-            )
+            st.checkbox("Ninguna por ahora", key="part_acomp_ninguna")
+
+            current_none = bool(st.session_state.get("part_acomp_ninguna"))
+            current_values = {
+                key: bool(st.session_state.get(key))
+                for key in ACOMP_KEYS
+            }
+            prev_values = st.session_state.get("_prev_part_acomp_values")
+            prev_none = st.session_state.get("_prev_part_acomp_ninguna")
+
+            none_toggled_on = current_none and not bool(prev_none)
+            if prev_values is None:
+                toggled_other_keys = [key for key, val in current_values.items() if val]
+            else:
+                toggled_other_keys = [
+                    key
+                    for key, val in current_values.items()
+                    if val and not bool(prev_values.get(key))
+                ]
+
+            if none_toggled_on:
+                for key in ACOMP_KEYS:
+                    if st.session_state.get(key):
+                        st.session_state[key] = False
+            elif toggled_other_keys and current_none:
+                st.session_state["part_acomp_ninguna"] = False
+
+            st.session_state["_prev_part_acomp_values"] = current_values
+            st.session_state["_prev_part_acomp_ninguna"] = current_none
 
             conoce_opciones = ["Sí", "No", "Más o menos"]
             conoce_val = st.session_state.get("part_conoce_rji", "")
