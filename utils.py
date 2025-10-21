@@ -3,9 +3,8 @@ import re
 import textwrap
 import json
 import mimetypes
-import uuid
 from pathlib import Path
-import io
+from contextlib import suppress
 
 import gspread
 import pandas as pd
@@ -176,6 +175,14 @@ def append_row(spreadsheet_id: str, sheet: str, row: list, expected_cols: list):
     ws.append_row(prepared, value_input_option="USER_ENTERED")
 
 
+def _record_drive_error(message: str) -> None:
+    """Store the last Drive error so the UI can surface troubleshooting info."""
+    if not message:
+        st.session_state.pop("_drive_last_error", None)
+        return
+    st.session_state["_drive_last_error"] = message
+
+
 def upload_file_to_drive(local_path: Path, folder_id: str = "") -> str:
     """Upload a file to Drive and return a shareable link.
 
@@ -188,11 +195,13 @@ def upload_file_to_drive(local_path: Path, folder_id: str = "") -> str:
         local_path = Path(str(local_path))
 
     if not local_path.exists():
+        _record_drive_error(f"El archivo {local_path} no existe para subirlo a Drive.")
         return ""
 
     try:
         credentials = _get_google_credentials()
-    except RuntimeError:
+    except RuntimeError as exc:
+        _record_drive_error(str(exc))
         return ""
 
     session = AuthorizedSession(credentials)
@@ -203,57 +212,65 @@ def upload_file_to_drive(local_path: Path, folder_id: str = "") -> str:
         metadata["parents"] = [cleaned_folder]
 
     mime_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
-    boundary = f"===============driveupload=={uuid.uuid4().hex}=="
-
-    body = io.BytesIO()
-    body.write(f"--{boundary}\r\n".encode("utf-8"))
-    body.write(b"Content-Type: application/json; charset=UTF-8\r\n\r\n")
-    body.write(json.dumps(metadata).encode("utf-8"))
-    body.write(b"\r\n")
-    body.write(f"--{boundary}\r\n".encode("utf-8"))
-    body.write(f"Content-Type: {mime_type}\r\n\r\n".encode("utf-8"))
-    body.write(local_path.read_bytes())
-    body.write(b"\r\n")
-    body.write(f"--{boundary}--".encode("utf-8"))
-    body.seek(0)
-
-    headers = {"Content-Type": f"multipart/related; boundary={boundary}"}
     upload_url = "https://www.googleapis.com/upload/drive/v3/files"
-    params = {"uploadType": "multipart"}
-    # Allow uploading to shared drives when the folder belongs to one.
-    params["supportsAllDrives"] = "true"
+    params = {
+        "uploadType": "multipart",
+        "supportsAllDrives": "true",
+        "fields": "id,webViewLink,webContentLink",
+    }
 
-    response = session.post(
-        upload_url,
-        headers=headers,
-        params=params,
-        data=body.getvalue(),
-    )
+    try:
+        with local_path.open("rb") as fh:
+            files = {
+                "metadata": (
+                    "metadata",
+                    json.dumps(metadata),
+                    "application/json; charset=UTF-8",
+                ),
+                "file": (
+                    local_path.name,
+                    fh,
+                    mime_type,
+                ),
+            }
+            response = session.post(upload_url, params=params, files=files)
+    except Exception as exc:
+        _record_drive_error(f"Error al subir a Drive: {exc}")
+        return ""
+
     if response.status_code not in (200, 201):
+        _record_drive_error(
+            f"Error al subir a Drive (HTTP {response.status_code}): {response.text.strip()}"
+        )
         return ""
 
     payload = response.json() if response.content else {}
     file_id = payload.get("id")
     web_view_link = payload.get("webViewLink")
+    web_content_link = payload.get("webContentLink")
+
     if not file_id:
+        _record_drive_error("La respuesta de Drive no incluyó un ID de archivo.")
         return ""
 
     permission_params = {
         "sendNotificationEmail": "false",
         "supportsAllDrives": "true",
+        "fields": "id",
     }
 
-    try:
+    with suppress(Exception):
         session.post(
             f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
             params=permission_params,
             json={"role": "reader", "type": "anyone"},
         )
-    except Exception:
-        pass
 
-    if isinstance(web_view_link, str) and web_view_link.startswith("http"):
-        return web_view_link
+    _record_drive_error("")
+
+    for candidate in (web_view_link, web_content_link):
+        if isinstance(candidate, str) and candidate.startswith("http"):
+            return candidate
 
     return f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
 

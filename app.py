@@ -31,6 +31,14 @@ UPLOADS_DRIVE_FOLDER_ID = (
     or st.secrets.get("DRIVE_FOLDER_ID")
     or ""
 ).strip()
+BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
+SHEET_NAME = (st.secrets.get("SHEET_NAME") or "PARTICIPANTES").strip() or "PARTICIPANTES"
+UPLOADS_PUBLIC_BASE_URL = (st.secrets.get("UPLOADS_PUBLIC_BASE_URL") or "").strip()
+UPLOADS_DRIVE_FOLDER_ID = (
+    st.secrets.get("UPLOADS_DRIVE_FOLDER_ID")
+    or st.secrets.get("DRIVE_FOLDER_ID")
+    or ""
+).strip()
 
 if not SPREADSHEET_ID:
     st.error("No se encontró el ID de la hoja de cálculo en st.secrets['SPREADSHEET_ID'].")
@@ -1154,6 +1162,8 @@ with tab1:
                     contacto_doc_url = payload.get("archivo_doc_contacto", "")
                     participante_label = payload.get("archivo_doc_participante_label", "")
                     contacto_label = payload.get("archivo_doc_contacto_label", "")
+                    participant_drive_failed = False
+                    contact_drive_failed = False
 
                     if st.session_state.get("part_doc_id_bytes") and st.session_state.get("part_doc_id_name"):
                         uploads_dir.mkdir(exist_ok=True)
@@ -1180,6 +1190,8 @@ with tab1:
                             participante_doc_url = drive_link
                         else:
                             participante_doc_url = str(participante_path)
+                            if UPLOADS_DRIVE_FOLDER_ID:
+                                participant_drive_failed = True
 
                     if st.session_state.get("part_contact_doc_bytes") and st.session_state.get("part_contact_doc_name"):
                         uploads_dir.mkdir(exist_ok=True)
@@ -1206,6 +1218,8 @@ with tab1:
                             contacto_doc_url = drive_link
                         else:
                             contacto_doc_url = str(contacto_path)
+                            if UPLOADS_DRIVE_FOLDER_ID:
+                                contact_drive_failed = True
 
                     nombres_val = _capture_field("nombres", st.session_state.get("part_nombres", ""))
                     apellidos_val = _capture_field("apellidos", st.session_state.get("part_apellidos", ""))
@@ -1339,6 +1353,13 @@ with tab1:
                         payload.get("archivo_doc_contacto", contacto_doc_url),
                         payload.get("archivo_doc_contacto_label", contacto_label),
                     )
+
+                    drive_error_message = st.session_state.get("_drive_last_error", "").strip()
+                    if drive_error_message and (participant_drive_failed or contact_drive_failed):
+                        st.warning(
+                            "No se pudo publicar uno o más archivos en Drive. Se guardó la ruta local por ahora. "
+                            "Mensaje técnico: " + drive_error_message
+                        )
 
                     row = [
                         ts,
