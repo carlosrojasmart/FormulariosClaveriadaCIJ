@@ -187,6 +187,11 @@ def _clean_string(value: object) -> str:
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized
 
+
+def _get_participant_payload() -> dict:
+    """Centralized storage for the participant export row."""
+    return st.session_state.setdefault("_participant_payload", {})
+
 COLOMBIA_DEPARTAMENTOS = [
     "Amazonas", "Antioquia", "Arauca", "Atlántico", "Bogotá D.C.", "Bolívar", "Boyacá", "Caldas",
     "Caquetá", "Casanare", "Cauca", "Cesar", "Chocó", "Córdoba", "Cundinamarca", "Guainía",
@@ -364,6 +369,7 @@ def _reset_participant_state():
     ):
         st.session_state.pop(transient_key, None)
 
+    st.session_state.pop("_participant_payload", None)
     st.session_state.pop("_participant_reset_pending", None)
 
 
@@ -513,6 +519,45 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
     if not parentesco:
         errors.append("Selecciona el parentesco o vínculo del contacto de emergencia.")
 
+    es_mayor_bool = None
+    if mayor_option == "Sí":
+        es_mayor_bool = True
+    elif mayor_option == "No":
+        es_mayor_bool = False
+
+    is_valid = len(errors) == 0
+    if is_valid:
+        payload = _get_participant_payload()
+        payload.update(
+            {
+                "es_mayor_edad": es_mayor_bool,
+                "tipo_documento_participante": st.session_state.get("part_tipo_doc_p", ""),
+                "documento_participante": cleaned_doc if doc_ok else _clean_string(st.session_state.get("part_doc_p", "")),
+                "nombres": _clean_string(st.session_state.get("part_nombres", "")),
+                "apellidos": _clean_string(st.session_state.get("part_apellidos", "")),
+                "como_te_gusta_que_te_digan": _clean_string(st.session_state.get("part_apodo", "")),
+                "telefono_celular": _clean_string(st.session_state.get("part_tel", "")),
+                "correo": _clean_string(st.session_state.get("part_correo", "")),
+                "direccion": _clean_string(st.session_state.get("part_direccion", "")),
+                "region": _clean_string(st.session_state.get("part_region", "")),
+                "ciudad": _clean_string(st.session_state.get("part_ciudad", "")),
+                "fecha_nacimiento": st.session_state.get("part_fecha_nac"),
+                "talla_camisa": st.session_state.get("part_talla", ""),
+                "eps": _clean_string(st.session_state.get("part_eps", "")),
+                "restricciones_alimentarias": _clean_string(st.session_state.get("part_rest_alim", "")),
+                "salud_mental": _clean_string(st.session_state.get("part_salud_mental", "")),
+                "obra_institucion": _clean_string(st.session_state.get("part_obra", "")),
+                "proceso_juvenil": _clean_string(st.session_state.get("part_proceso", "")),
+                "tipo_documento_contacto": st.session_state.get("part_tipo_doc_a", ""),
+                "documento_contacto": cleaned_doc_a if doc_a_ok else _clean_string(st.session_state.get("part_doc_a", "")),
+                "nombres_contacto": _clean_string(nom_a),
+                "apellidos_contacto": _clean_string(ape_a),
+                "telefono_contacto": _clean_string(tel_a),
+                "correo_contacto": _clean_string(st.session_state.get("part_correo_a", "")),
+                "parentesco_contacto": _clean_string(parentesco),
+            }
+        )
+
     return _emit_stage_errors(errors, show_errors)
 
 
@@ -530,6 +575,17 @@ def _validate_participant_stage2(show_errors: bool = True) -> bool:
 
     if not st.session_state.get("part_pregunta", "").strip():
         errors.append("Propón una pregunta para conectar con otros participantes.")
+    is_valid = len(errors) == 0
+    if is_valid:
+        payload = _get_participant_payload()
+        payload.update(
+            {
+                "experiencia_significativa": _clean_string(st.session_state.get("part_exp_sig", "")),
+                "intereses_personales": list(st.session_state.get("part_intereses", [])),
+                "hobby_o_dato_curioso": _clean_string(st.session_state.get("part_dato_freak", "")),
+                "pregunta_para_conectar": _clean_string(st.session_state.get("part_pregunta", "")),
+            }
+        )
 
     return _emit_stage_errors(errors, show_errors)
 
@@ -989,6 +1045,37 @@ with tab1:
                     if st.session_state.get("part_acomp_ninguna"):
                         acomp_items.append("Ninguna")
 
+                    payload = _get_participant_payload()
+                    CRITICAL_KEYS = {
+                        "nombres",
+                        "apellidos",
+                        "telefono_celular",
+                        "correo",
+                        "direccion",
+                        "region",
+                        "ciudad",
+                        "nombres_contacto",
+                        "apellidos_contacto",
+                        "telefono_contacto",
+                        "parentesco_contacto",
+                    }
+
+                    def _capture_clean(key: str, value: object) -> str:
+                        clean = _clean_string(value)
+                        if clean or key not in payload or key not in CRITICAL_KEYS:
+                            payload[key] = clean
+                        return payload.get(key, clean)
+
+                    if doc_p:
+                        payload["documento_participante"] = doc_p
+                    if doc_a:
+                        payload["documento_contacto"] = doc_a
+                    if st.session_state.get("part_tipo_doc_p") or not payload.get("tipo_documento_participante"):
+                        payload["tipo_documento_participante"] = st.session_state.get("part_tipo_doc_p", "")
+                    if st.session_state.get("part_tipo_doc_a") or not payload.get("tipo_documento_contacto"):
+                        payload["tipo_documento_contacto"] = st.session_state.get("part_tipo_doc_a", "")
+                    payload["es_mayor_edad"] = es_mayor
+
                     uploads_dir = Path("uploads")
                     participante_doc_url = ""
                     contacto_doc_url = ""
@@ -1005,40 +1092,76 @@ with tab1:
                             f.write(st.session_state["part_contact_doc_bytes"])
                         contacto_doc_url = str(contacto_path)
 
-                    nombres_val = _clean_string(st.session_state.get("part_nombres", ""))
-                    apellidos_val = _clean_string(st.session_state.get("part_apellidos", ""))
-                    apodo_val = _clean_string(st.session_state.get("part_apodo", ""))
-                    direccion_val = _clean_string(st.session_state.get("part_direccion", ""))
-                    correo_val = _clean_string(st.session_state.get("part_correo", ""))
-                    tel_val = _clean_string(st.session_state.get("part_tel", ""))
-                    region_val = _clean_string(st.session_state.get("part_region", ""))
-                    ciudad_val = _clean_string(st.session_state.get("part_ciudad", ""))
-                    eps_val = _clean_string(st.session_state.get("part_eps", ""))
-                    rest_alim_val = _clean_string(st.session_state.get("part_rest_alim", ""))
-                    salud_mental_val = _clean_string(st.session_state.get("part_salud_mental", ""))
-                    obra_val = _clean_string(st.session_state.get("part_obra", ""))
-                    proceso_val = _clean_string(st.session_state.get("part_proceso", ""))
-                    exp_sig_val = _clean_string(st.session_state.get("part_exp_sig", ""))
-                    dato_freak_val = _clean_string(st.session_state.get("part_dato_freak", ""))
-                    pregunta_val = _clean_string(st.session_state.get("part_pregunta", ""))
-                    motivo_val = _clean_string(st.session_state.get("part_motivo", ""))
-                    preguntas_frec_val = _clean_string(st.session_state.get("part_preguntas_frec", ""))
+                    nombres_val = _capture_clean("nombres", st.session_state.get("part_nombres", ""))
+                    apellidos_val = _capture_clean("apellidos", st.session_state.get("part_apellidos", ""))
+                    apodo_val = _capture_clean("como_te_gusta_que_te_digan", st.session_state.get("part_apodo", ""))
+                    tel_val = _capture_clean("telefono_celular", st.session_state.get("part_tel", ""))
+                    correo_val = _capture_clean("correo", st.session_state.get("part_correo", ""))
+                    direccion_val = _capture_clean("direccion", st.session_state.get("part_direccion", ""))
+                    region_val = _capture_clean("region", st.session_state.get("part_region", ""))
+                    ciudad_val = _capture_clean("ciudad", st.session_state.get("part_ciudad", ""))
+                    eps_val = _capture_clean("eps", st.session_state.get("part_eps", ""))
+                    rest_alim_val = _capture_clean("restricciones_alimentarias", st.session_state.get("part_rest_alim", ""))
+                    salud_mental_val = _capture_clean("salud_mental", st.session_state.get("part_salud_mental", ""))
+                    obra_val = _capture_clean("obra_institucion", st.session_state.get("part_obra", ""))
+                    proceso_val = _capture_clean("proceso_juvenil", st.session_state.get("part_proceso", ""))
 
-                    nom_a_clean = _clean_string(nom_a)
-                    ape_a_clean = _clean_string(st.session_state.get("part_ape_a", ""))
-                    tel_a_clean = _clean_string(st.session_state.get("part_tel_a", ""))
-                    correo_a_clean = _clean_string(st.session_state.get("part_correo_a", ""))
-                    parentesco_clean = _clean_string(st.session_state.get("part_parentesco_a", ""))
+                    exp_sig_val = payload.get("experiencia_significativa") or _clean_string(st.session_state.get("part_exp_sig", ""))
+                    if exp_sig_val:
+                        payload["experiencia_significativa"] = exp_sig_val
+                    intereses_payload = payload.get("intereses_personales")
+                    if intereses:
+                        payload["intereses_personales"] = list(intereses)
+                        intereses_payload = payload["intereses_personales"]
+                    dato_freak_val = _capture_clean("hobby_o_dato_curioso", st.session_state.get("part_dato_freak", ""))
+                    pregunta_val = _capture_clean("pregunta_para_conectar", st.session_state.get("part_pregunta", ""))
+                    motivo_val = _capture_clean("motivo_experiencia_top", st.session_state.get("part_motivo", ""))
+                    preguntas_frec_val = _capture_clean("preguntas_frecuentes", st.session_state.get("part_preguntas_frec", ""))
+
+                    nom_a_clean = _capture_clean("nombres_contacto", nom_a)
+                    ape_a_clean = _capture_clean("apellidos_contacto", st.session_state.get("part_ape_a", ""))
+                    tel_a_clean = _capture_clean("telefono_contacto", st.session_state.get("part_tel_a", ""))
+                    correo_a_clean = _capture_clean("correo_contacto", st.session_state.get("part_correo_a", ""))
+                    parentesco_clean = _capture_clean("parentesco_contacto", st.session_state.get("part_parentesco_a", ""))
+
+                    fecha_nac_value = st.session_state.get("part_fecha_nac")
+                    if fecha_nac_value is not None or "fecha_nacimiento" not in payload:
+                        payload["fecha_nacimiento"] = fecha_nac_value
+                    talla_value = st.session_state.get("part_talla", "")
+                    if talla_value or "talla_camisa" not in payload:
+                        payload["talla_camisa"] = talla_value
+
+                    payload["acompanamientos_marcados"] = ", ".join(acomp_items)
+                    payload["acompanamiento_familia"] = bool(st.session_state.get("part_acomp_familia"))
+                    payload["acompanamiento_amigos"] = bool(st.session_state.get("part_acomp_amigos"))
+                    payload["acompanamiento_escucha_activa"] = bool(st.session_state.get("part_acomp_escucha"))
+                    payload["acompanamiento_mentoria"] = bool(st.session_state.get("part_acomp_mentoria"))
+                    payload["acompanamiento_espiritual"] = bool(st.session_state.get("part_acomp_espiritual"))
+                    payload["acompanamiento_red_comunitaria"] = bool(st.session_state.get("part_acomp_red_comunidad"))
+                    payload["acompanamiento_ninguna"] = bool(st.session_state.get("part_acomp_ninguna"))
+
+                    conoce_value = conoce_map.get(st.session_state.get("part_conoce_rji"), "")
+                    if conoce_value or "conoce_rji" not in payload:
+                        payload["conoce_rji"] = conoce_value
+
+                    acepta_datos = bool(st.session_state.get("part_acepta_datos"))
+                    acepta_whatsapp = bool(st.session_state.get("part_acepta_whatsapp"))
+                    payload["acepta_tratamiento_datos"] = acepta_datos
+                    payload["acepta_whatsapp"] = acepta_whatsapp
+                    payload["experiencia_top_calculada"] = experiencia_top
+                    payload["nivel_experticie"] = perfil_cerc
+                    payload["archivo_doc_participante"] = participante_doc_url
+                    payload["archivo_doc_contacto"] = contacto_doc_url
 
                     full_name = f"{nombres_val} {apellidos_val}".strip()
-                    edad_aprox = calcular_edad(st.session_state.get("part_fecha_nac"))
-                    intereses_text = ", ".join(intereses)
+                    edad_aprox = calcular_edad(payload.get("fecha_nacimiento"))
+                    intereses_text = ", ".join(intereses_payload or [])
 
                     row = [
                         ts,
                         "TRUE" if es_mayor else "FALSE",
-                        st.session_state.get("part_tipo_doc_p", ""),
-                        doc_p,
+                        payload.get("tipo_documento_participante", ""),
+                        payload.get("documento_participante", doc_p),
                         nombres_val,
                         apellidos_val,
                         full_name,
@@ -1048,9 +1171,9 @@ with tab1:
                         direccion_val,
                         region_val,
                         ciudad_val,
-                        str(st.session_state.get("part_fecha_nac")),
+                        str(payload.get("fecha_nacimiento")),
                         edad_aprox,
-                        st.session_state.get("part_talla", ""),
+                        payload.get("talla_camisa", ""),
                         eps_val,
                         rest_alim_val,
                         salud_mental_val,
@@ -1070,26 +1193,26 @@ with tab1:
                         perfil_cerc,
                         motivo_val,
                         preguntas_frec_val,
-                        ", ".join(acomp_items),
-                        "TRUE" if st.session_state.get("part_acomp_familia") else "FALSE",
-                        "TRUE" if st.session_state.get("part_acomp_amigos") else "FALSE",
-                        "TRUE" if st.session_state.get("part_acomp_escucha") else "FALSE",
-                        "TRUE" if st.session_state.get("part_acomp_mentoria") else "FALSE",
-                        "TRUE" if st.session_state.get("part_acomp_espiritual") else "FALSE",
-                        "TRUE" if st.session_state.get("part_acomp_red_comunidad") else "FALSE",
-                        "TRUE" if st.session_state.get("part_acomp_ninguna") else "FALSE",
-                        conoce_map.get(st.session_state.get("part_conoce_rji"), ""),
-                        st.session_state.get("part_tipo_doc_a", ""),
-                        doc_a,
+                        payload.get("acompanamientos_marcados", ", ".join(acomp_items)),
+                        "TRUE" if payload.get("acompanamiento_familia") else "FALSE",
+                        "TRUE" if payload.get("acompanamiento_amigos") else "FALSE",
+                        "TRUE" if payload.get("acompanamiento_escucha_activa") else "FALSE",
+                        "TRUE" if payload.get("acompanamiento_mentoria") else "FALSE",
+                        "TRUE" if payload.get("acompanamiento_espiritual") else "FALSE",
+                        "TRUE" if payload.get("acompanamiento_red_comunitaria") else "FALSE",
+                        "TRUE" if payload.get("acompanamiento_ninguna") else "FALSE",
+                        payload.get("conoce_rji", conoce_value),
+                        payload.get("tipo_documento_contacto", ""),
+                        payload.get("documento_contacto", doc_a),
                         nom_a_clean,
                         ape_a_clean,
                         tel_a_clean,
                         correo_a_clean,
                         parentesco_clean,
-                        participante_doc_url,
-                        contacto_doc_url,
-                        "TRUE" if st.session_state.get("part_acepta_datos") else "FALSE",
-                        "TRUE" if st.session_state.get("part_acepta_whatsapp") else "FALSE",
+                        payload.get("archivo_doc_participante", participante_doc_url),
+                        payload.get("archivo_doc_contacto", contacto_doc_url),
+                        "TRUE" if acepta_datos else "FALSE",
+                        "TRUE" if acepta_whatsapp else "FALSE",
                     ]
                     try:
                         append_row(SPREADSHEET_ID, "PARTICIPANTES", row, PARTICIPANTES_COLS)
