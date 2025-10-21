@@ -619,8 +619,10 @@ with tab1:
             st.text_input("Propón una pregunta para conectar con otros", key="part_pregunta")
 
             col1, col2 = st.columns(2)
-            volver = col1.form_submit_button("Retroceder", use_container_width=True)
-            avanzar = col2.form_submit_button("Avanzar a experiencias", use_container_width=True)
+            with col1:
+                volver = st.form_submit_button("Retroceder", use_container_width=True)
+            with col2:
+                avanzar = st.form_submit_button("Avanzar a experiencias", use_container_width=True)
             if volver:
                 _goto_participant_stage(1)
             elif avanzar:
@@ -741,8 +743,10 @@ with tab1:
             )
 
             col_back, col_save = st.columns(2)
-            volver_etapa = col_back.form_submit_button("Retroceder", use_container_width=True)
-            guardar = col_save.form_submit_button("Guardar participante", use_container_width=True)
+            with col_back:
+                volver_etapa = st.form_submit_button("Retroceder", use_container_width=True)
+            with col_save:
+                guardar = st.form_submit_button("Guardar participante", use_container_width=True)
             if volver_etapa:
                 _goto_participant_stage(2)
             elif guardar:
