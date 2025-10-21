@@ -1082,12 +1082,11 @@ with tab1:
                         if clean:
                             payload[key] = clean
                             return clean
-                        if allow_empty and (
-                            raw_value is None
-                            or (isinstance(raw_value, str) and raw_value == "")
-                        ):
-                            payload[key] = ""
-                            return ""
+                        if allow_empty:
+                            if key not in payload:
+                                payload[key] = ""
+                                return ""
+                            return payload.get(key, "")
                         return existing
 
                     if doc_p:
