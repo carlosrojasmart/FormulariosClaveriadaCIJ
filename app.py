@@ -14,8 +14,12 @@ from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # ===== CONFIG =====
-EXCEL_PATH = Path("rji_datos.xlsx")       # cambia aquí si deseas otra ruta
+SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "").strip()
 BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
+
+if not SPREADSHEET_ID:
+    st.error("No se encontró el ID de la hoja de cálculo en st.secrets['SPREADSHEET_ID'].")
+    st.stop()
 
 st.set_page_config(
     page_title="Claveriado RJI · Inscripción",
@@ -23,8 +27,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"     # oculta la barra lateral
 )
 
-# Asegura el Excel (no visible para usuarios)
-ensure_excel_with_sheets(EXCEL_PATH)
+# Asegura la hoja de cálculo (no visible para usuarios)
+ensure_excel_with_sheets(SPREADSHEET_ID)
 
 # ===== Estilos (paleta Claveriada + ocultar sidebar) =====
 st.markdown(
@@ -872,9 +876,9 @@ with tab1:
                         "TRUE" if st.session_state.get("part_acepta_whatsapp") else "FALSE",
                     ]
                     try:
-                        append_row(EXCEL_PATH, "PARTICIPANTES", row, PARTICIPANTES_COLS)
+                        append_row(SPREADSHEET_ID, "PARTICIPANTES", row, PARTICIPANTES_COLS)
                         try:
-                            update_unificado(EXCEL_PATH)
+                            update_unificado(SPREADSHEET_ID)
                         except Exception:
                             pass
                         st.success("¡Tu registro quedó guardado! Gracias por llegar al final ✨")
