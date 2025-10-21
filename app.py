@@ -13,12 +13,12 @@ from docx import Document
 from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+# Compatibilidad para versiones recientes de Streamlit donde experimental_rerun fue removido
+if not hasattr(st, "experimental_rerun") and hasattr(st, "rerun"):
+    st.experimental_rerun = st.rerun  # type: ignore[attr-defined]
+
 # ===== CONFIG =====
-SPREADSHEET_ID = (
-    st.secrets.get("SPREADSHEET_ID")
-    or (st.secrets.get("gspread", {}) or {}).get("spreadsheet_id")
-    or ""
-).strip()
+SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "").strip()
 BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
 
 if not SPREADSHEET_ID:
@@ -627,12 +627,12 @@ with tab1:
             elif st.session_state.get("part_doc_id_name"):
                 st.caption(f"Archivo guardado: {st.session_state.get('part_doc_id_name')}")
 
-            st.text_input("Nombres", placeholder="Como aparecen en tu documento", key="part_nombres")
-            st.text_input("Apellidos", placeholder="Como aparecen en tu documento", key="part_apellidos")
-            st.text_input("¿Cómo te gusta que te digan?", placeholder="Opcional", key="part_apodo")
-            st.text_input("Teléfono celular", placeholder="+57 ...", key="part_tel")
-            st.text_input("Correo", placeholder="tu@correo.com", key="part_correo")
-            st.text_input("Dirección de residencia", placeholder="Barrio, calle, número", key="part_direccion")
+            nombres = st.text_input("Nombres", placeholder="Como aparecen en tu documento", key="part_nombres")
+            apellidos = st.text_input("Apellidos", placeholder="Como aparecen en tu documento", key="part_apellidos")
+            apodo = st.text_input("¿Cómo te gusta que te digan?", placeholder="Opcional", key="part_apodo")
+            telefono = st.text_input("Teléfono celular", placeholder="+57 ...", key="part_tel")
+            correo = st.text_input("Correo", placeholder="tu@correo.com", key="part_correo")
+            direccion = st.text_input("Dirección de residencia", placeholder="Barrio, calle, número", key="part_direccion")
 
             col_reg, col_ciudad = st.columns(2)
             region_options = [""] + COLOMBIA_DEPARTAMENTOS
@@ -676,13 +676,13 @@ with tab1:
                 format_func=lambda val: "Selecciona tu talla" if val == "" else val,
             )
 
-            st.text_input("EPS", placeholder="Escribe tu EPS", key="part_eps")
-            st.text_input(
+            eps = st.text_input("EPS", placeholder="Escribe tu EPS", key="part_eps")
+            rest_alim = st.text_input(
                 "Restricciones alimentarias (o 'ninguna')",
                 placeholder="Vegetariano, alergias, etc.",
                 key="part_rest_alim"
             )
-            st.text_area(
+            salud = st.text_area(
                 "Complicaciones/alertas de salud (solo lo necesario para cuidarte mejor)",
                 key="part_salud_mental"
             )
@@ -709,7 +709,7 @@ with tab1:
             else:
                 st.session_state.part_obra = obra_sel
 
-            st.text_input(
+            proceso = st.text_input(
                 "¿Perteneces a algún proceso juvenil? ¿Cuál?",
                 placeholder="Nombre del proceso",
                 key="part_proceso"
@@ -992,7 +992,9 @@ with tab1:
                             f.write(st.session_state["part_contact_doc_bytes"])
                         contacto_doc_url = str(contacto_path)
 
-                    full_name = f"{st.session_state.get('part_nombres', '').strip()} {st.session_state.get('part_apellidos', '').strip()}".strip()
+                    nombres_val = _clean_string(st.session_state.get("part_nombres", ""))
+                    apellidos_val = _clean_string(st.session_state.get("part_apellidos", ""))
+                    full_name = f"{nombres_val} {apellidos_val}".strip()
                     edad_aprox = calcular_edad(st.session_state.get("part_fecha_nac"))
                     intereses_text = ", ".join(intereses)
 
@@ -1004,24 +1006,24 @@ with tab1:
                         st.session_state.get("part_nombres", "").strip(),
                         st.session_state.get("part_apellidos", "").strip(),
                         full_name,
-                        st.session_state.get("part_apodo", "").strip(),
-                        st.session_state.get("part_tel", "").strip(),
-                        st.session_state.get("part_correo", "").strip(),
-                        st.session_state.get("part_direccion", "").strip(),
+                        _clean_string(st.session_state.get("part_apodo", "")),
+                        tel_p,
+                        correo_p,
+                        direccion,
                         st.session_state.get("part_region", "").strip(),
                         st.session_state.get("part_ciudad", "").strip(),
                         str(st.session_state.get("part_fecha_nac")),
                         edad_aprox,
                         st.session_state.get("part_talla", ""),
-                        st.session_state.get("part_eps", "").strip(),
-                        st.session_state.get("part_rest_alim", "").strip(),
-                        st.session_state.get("part_salud_mental", "").strip(),
-                        st.session_state.get("part_obra", "").strip(),
-                        st.session_state.get("part_proceso", "").strip(),
+                        eps,
+                        rest_alim,
+                        salud_val,
+                        _clean_string(st.session_state.get("part_obra", "")),
+                        proceso_val,
                         intereses_text,
-                        st.session_state.get("part_exp_sig", "").strip(),
-                        st.session_state.get("part_dato_freak", "").strip(),
-                        st.session_state.get("part_pregunta", "").strip(),
+                        _clean_string(st.session_state.get("part_exp_sig", "")),
+                        _clean_string(st.session_state.get("part_dato_freak", "")),
+                        _clean_string(st.session_state.get("part_pregunta", "")),
                         int(ranks["Servicio"]),
                         int(ranks["Peregrinaje"]),
                         int(ranks["Cultura y arte"]),
@@ -1030,8 +1032,8 @@ with tab1:
                         int(ranks["Incidencia política"]),
                         experiencia_top,
                         perfil_cerc,
-                        st.session_state.get("part_motivo", "").strip(),
-                        st.session_state.get("part_preguntas_frec", "").strip(),
+                        _clean_string(st.session_state.get("part_motivo", "")),
+                        _clean_string(st.session_state.get("part_preguntas_frec", "")),
                         ", ".join(acomp_items),
                         "TRUE" if st.session_state.get("part_acomp_familia") else "FALSE",
                         "TRUE" if st.session_state.get("part_acomp_amigos") else "FALSE",
