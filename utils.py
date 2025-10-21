@@ -1,8 +1,10 @@
 from typing import List
+import re
+import textwrap
 
+import gspread
 import pandas as pd
 import streamlit as st
-import gspread
 from gspread.exceptions import WorksheetNotFound
 from google.oauth2.service_account import Credentials
 
@@ -42,8 +44,37 @@ def _normalize_private_key(info: dict) -> dict:
     """Devuelve una copia del diccionario con la clave privada formateada correctamente."""
     cleaned = dict(info) if info is not None else {}
     private_key = cleaned.get("private_key")
-    if isinstance(private_key, str) and "BEGIN PRIVATE KEY" in private_key:
-        cleaned["private_key"] = private_key.replace("\\n", "\n")
+    if not isinstance(private_key, str):
+        return cleaned
+
+    raw = private_key.strip().strip("\"'")
+    raw = raw.replace("\r", "\n")
+    raw = raw.replace("\\r", "\n").replace("\\n", "\n")
+    try:
+        raw = raw.encode("utf-8").decode("unicode_escape")
+    except UnicodeDecodeError:
+        pass
+
+    if "BEGIN PRIVATE KEY" not in raw or "END PRIVATE KEY" not in raw:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    match = re.search(r"-----BEGIN PRIVATE KEY-----\s*(.*?)\s*-----END PRIVATE KEY-----", raw, re.DOTALL)
+    if not match:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    body = match.group(1)
+    body = re.sub(r"\s+", "", body)
+
+    if not body:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    normalized = "-----BEGIN PRIVATE KEY-----\n"
+    normalized += "\n".join(textwrap.wrap(body, 64))
+    normalized += "\n-----END PRIVATE KEY-----\n"
+    cleaned["private_key"] = normalized
     return cleaned
 
 

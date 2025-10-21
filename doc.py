@@ -1,19 +1,49 @@
 # doc.py
-from docx import Document
-from docx.shared import Pt, Inches, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from datetime import date, datetime
 from pathlib import Path
-import pandas as pd
+import re
+import textwrap
+
 import gspread
+import pandas as pd
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Inches, Pt
 from google.oauth2.service_account import Credentials
 
 
 def _normalize_private_key(info: dict) -> dict:
     cleaned = dict(info) if info is not None else {}
     pk = cleaned.get("private_key")
-    if isinstance(pk, str) and "BEGIN PRIVATE KEY" in pk:
-        cleaned["private_key"] = pk.replace("\\n", "\n")
+    if not isinstance(pk, str):
+        return cleaned
+
+    raw = pk.strip().strip("\"'")
+    raw = raw.replace("\r", "\n")
+    raw = raw.replace("\\r", "\n").replace("\\n", "\n")
+    try:
+        raw = raw.encode("utf-8").decode("unicode_escape")
+    except UnicodeDecodeError:
+        pass
+
+    if "BEGIN PRIVATE KEY" not in raw or "END PRIVATE KEY" not in raw:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    match = re.search(r"-----BEGIN PRIVATE KEY-----\s*(.*?)\s*-----END PRIVATE KEY-----", raw, re.DOTALL)
+    if not match:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    body = re.sub(r"\s+", "", match.group(1))
+    if not body:
+        cleaned["private_key"] = raw
+        return cleaned
+
+    normalized = "-----BEGIN PRIVATE KEY-----\n"
+    normalized += "\n".join(textwrap.wrap(body, 64))
+    normalized += "\n-----END PRIVATE KEY-----\n"
+    cleaned["private_key"] = normalized
     return cleaned
 
 # ====== CONFIGURA AQUÍ ======
