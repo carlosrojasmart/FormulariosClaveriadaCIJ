@@ -5,6 +5,7 @@ import re
 import unicodedata
 from pathlib import Path
 from datetime import datetime, date
+from urllib.parse import urljoin, quote
 from utils import (
     ensure_excel_with_sheets, append_row, update_unificado,
     PARTICIPANTES_COLS,
@@ -22,6 +23,7 @@ if not hasattr(st, "experimental_rerun") and hasattr(st, "rerun"):
 # ===== CONFIG =====
 SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "").strip()
 BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
+UPLOADS_PUBLIC_BASE_URL = (st.secrets.get("UPLOADS_PUBLIC_BASE_URL") or "").strip()
 
 if not SPREADSHEET_ID:
     st.error("No se encontró el ID de la hoja de cálculo en st.secrets['SPREADSHEET_ID'].")
@@ -208,6 +210,36 @@ def _format_phone_for_sheet(value: str) -> str:
     if not value:
         return ""
     return f"'{value}"
+
+
+def _format_upload_for_sheet(path_value: str) -> str:
+    """Return a Sheets-friendly value (hyperlink when possible) for uploaded files."""
+    if not path_value:
+        return ""
+
+    path_value = str(path_value)
+    filename = Path(path_value).name or "Archivo"
+    safe_label = filename.replace('"', '""')
+
+    public_base = UPLOADS_PUBLIC_BASE_URL.rstrip("/")
+    if public_base:
+        relative = Path(path_value).as_posix()
+        # Remove leading relative markers and root slashes to avoid urljoin resets.
+        while relative.startswith("./"):
+            relative = relative[2:]
+        if relative.startswith("/"):
+            relative = relative[1:]
+        if relative.startswith("uploads/"):
+            relative_fragment = relative[len("uploads/"):]
+        else:
+            relative_fragment = relative
+        base = f"{public_base}/"
+        relative_encoded = quote(relative_fragment, safe="/")
+        url = urljoin(base, relative_encoded)
+        url = url.replace('"', "%22")
+        return f'=HYPERLINK("{url}", "{safe_label}")'
+
+    return path_value
 
 
 def _get_participant_payload() -> dict:
@@ -1225,6 +1257,12 @@ with tab1:
                     full_name = f"{nombres_val} {apellidos_val}".strip()
                     edad_aprox = calcular_edad(payload.get("fecha_nacimiento"))
                     intereses_text = ", ".join(intereses_payload or [])
+                    participante_doc_cell = _format_upload_for_sheet(
+                        payload.get("archivo_doc_participante", participante_doc_url)
+                    )
+                    contacto_doc_cell = _format_upload_for_sheet(
+                        payload.get("archivo_doc_contacto", contacto_doc_url)
+                    )
 
                     row = [
                         ts,
@@ -1278,8 +1316,8 @@ with tab1:
                         tel_a_sheet,
                         correo_a_clean,
                         parentesco_clean,
-                        payload.get("archivo_doc_participante", participante_doc_url),
-                        payload.get("archivo_doc_contacto", contacto_doc_url),
+                        participante_doc_cell,
+                        contacto_doc_cell,
                         "TRUE" if acepta_datos else "FALSE",
                         "TRUE" if acepta_whatsapp else "FALSE",
                     ]
