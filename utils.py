@@ -1,12 +1,17 @@
 from typing import List
 import re
 import textwrap
+import json
+import mimetypes
+from pathlib import Path
+from contextlib import suppress
 
 import gspread
 import pandas as pd
 import streamlit as st
 from gspread.exceptions import WorksheetNotFound
 from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import AuthorizedSession
 
 PARTICIPANTES_COLS = [
     "timestamp","es_mayor_edad","tipo_documento_participante","documento_participante","nombres","apellidos",
@@ -37,7 +42,11 @@ UNIFICADO_COLS = [
     "consentimiento_lista_contiene_doc_participante","observaciones"
 ]
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive",
+]
 
 
 def _normalize_private_key(info: dict) -> dict:
@@ -79,12 +88,18 @@ def _normalize_private_key(info: dict) -> dict:
 
 
 @st.cache_resource(show_spinner=False)
-def _get_gspread_client():
+def _get_google_credentials():
     credentials_info = st.secrets.get("gcp_service_account")
     if not credentials_info:
         raise RuntimeError("No se encontraron las credenciales de Google en st.secrets['gcp_service_account'].")
     normalized_info = _normalize_private_key(credentials_info)
     credentials = Credentials.from_service_account_info(normalized_info, scopes=SCOPES)
+    return credentials
+
+
+@st.cache_resource(show_spinner=False)
+def _get_gspread_client():
+    credentials = _get_google_credentials()
     return gspread.authorize(credentials)
 
 
@@ -159,6 +174,127 @@ def append_row(spreadsheet_id: str, sheet: str, row: list, expected_cols: list):
     ws = _ensure_worksheet(sh, sheet, expected_cols)
     prepared = [_stringify_cell(row[i]) if i < len(row) else "" for i in range(len(expected_cols))]
     ws.append_row(prepared, value_input_option="USER_ENTERED")
+
+
+def _get_service_account_email() -> str:
+    info = st.secrets.get("gcp_service_account")
+    if isinstance(info, dict):
+        email = info.get("client_email")
+        if isinstance(email, str):
+            return email
+    return ""
+
+
+def _record_drive_error(message: str) -> None:
+    """Store the last Drive error so the UI can surface troubleshooting info."""
+    if not message:
+        st.session_state.pop("_drive_last_error", None)
+        return
+    st.session_state["_drive_last_error"] = message
+
+
+def upload_file_to_drive(local_path: Path, folder_id: str = "") -> str:
+    """Upload a file to Drive and return a shareable link.
+
+    When a Shared Drive folder is provided the request must opt-in to
+    ``supportsAllDrives`` or Drive rejects the upload. Streamlit users often
+    store the destination folder inside a shared drive, so we set the flag
+    both for the file upload and the permission share call.
+    """
+    if not isinstance(local_path, Path):
+        local_path = Path(str(local_path))
+
+    if not local_path.exists():
+        _record_drive_error(f"El archivo {local_path} no existe para subirlo a Drive.")
+        return ""
+
+    try:
+        credentials = _get_google_credentials()
+    except RuntimeError as exc:
+        _record_drive_error(str(exc))
+        return ""
+
+    session = AuthorizedSession(credentials)
+
+    metadata = {"name": local_path.name}
+    cleaned_folder = (folder_id or "").strip()
+    if cleaned_folder:
+        metadata["parents"] = [cleaned_folder]
+
+    mime_type = mimetypes.guess_type(local_path.name)[0] or "application/octet-stream"
+    upload_url = "https://www.googleapis.com/upload/drive/v3/files"
+    params = {
+        "uploadType": "multipart",
+        "supportsAllDrives": "true",
+        "fields": "id,webViewLink,webContentLink",
+    }
+
+    try:
+        with local_path.open("rb") as fh:
+            files = {
+                "metadata": (
+                    "metadata",
+                    json.dumps(metadata),
+                    "application/json; charset=UTF-8",
+                ),
+                "file": (
+                    local_path.name,
+                    fh,
+                    mime_type,
+                ),
+            }
+            response = session.post(upload_url, params=params, files=files)
+    except Exception as exc:
+        _record_drive_error(f"Error al subir a Drive: {exc}")
+        return ""
+
+    if response.status_code not in (200, 201):
+        error_text = response.text.strip()
+        if response.status_code == 404 and cleaned_folder:
+            service_email = _get_service_account_email()
+            hint = (
+                "No se encontró la carpeta de Drive indicada. "
+                "Verifica que el ID sea correcto, que la carpeta exista y que el service account"
+            )
+            if service_email:
+                hint += f" ({service_email})"
+            hint += " tenga al menos permiso de Editor en esa carpeta o en la unidad compartida."
+            _record_drive_error(hint)
+        else:
+            _record_drive_error(
+                f"Error al subir a Drive (HTTP {response.status_code}): {error_text}"
+            )
+        return ""
+
+    payload = response.json() if response.content else {}
+    file_id = payload.get("id")
+    web_view_link = payload.get("webViewLink")
+    web_content_link = payload.get("webContentLink")
+
+    if not file_id:
+        _record_drive_error("La respuesta de Drive no incluyó un ID de archivo.")
+        return ""
+
+    permission_params = {
+        "sendNotificationEmail": "false",
+        "supportsAllDrives": "true",
+        "fields": "id",
+    }
+
+    with suppress(Exception):
+        session.post(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
+            params=permission_params,
+            json={"role": "reader", "type": "anyone"},
+        )
+
+    _record_drive_error("")
+
+    for candidate in (web_view_link, web_content_link):
+        if isinstance(candidate, str) and candidate.startswith("http"):
+            return candidate
+
+    return f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
 
 
 def get_sheet_as_dataframe(spreadsheet_id: str, sheet: str, expected_cols: list) -> pd.DataFrame:
