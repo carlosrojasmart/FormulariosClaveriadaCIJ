@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
-import io
 import copy
 from pathlib import Path
-from datetime import datetime, date, time
+from datetime import datetime, date
 from utils import (
     ensure_excel_with_sheets, append_row, update_unificado,
-    PARTICIPANTES_COLS, ACOMPANANTES_COLS, UNIFICADO_COLS,
+    PARTICIPANTES_COLS,
 )
 
 # Word para el documento de autorización en blanco
@@ -110,7 +109,7 @@ st.markdown('<div class="rji-title">Inscripciones · RJI</div>', unsafe_allow_ht
 st.markdown('<div class="rji-sub">Participantes y Acompañantes — Medellín, Colombia</div>', unsafe_allow_html=True)
 
 # ===== Pestañas =====
-tab1, tab2 = st.tabs(["Participante", "Acompañante/Acudiente"])
+tab1, tab2, tab3 = st.tabs(["Participante", "Acompañante/Institución", "Voluntarios"])
 
 # ===== Utilidades =====
 def crear_doc_autorizacion_en_blanco(logo_path="assets/logo.png"):
@@ -891,105 +890,10 @@ with tab1:
 
 # ================= ACOMPAÑANTE =================
 with tab2:
-    st.info("Para llenar este formulario debes tener organizados y a la mano los documentos de las y los participantes menores de edad de tu delegación.")
-    with st.form("form_acompanante", clear_on_submit=False):
-        st.markdown("#### Datos personales del acompañante / acudiente")
-        tipo_doc_ac = st.selectbox("Tipo de documento", ["CC", "CE", "Pasaporte", "Otro"])
-        doc_ac = st.text_input("Documento (solo dígitos)", max_chars=20, placeholder="Ej: 1012345678")
-        nom_ac = st.text_input("Nombre completo")
-        correo_ac = st.text_input("Correo")
-        tel_ac = st.text_input("Teléfono")
-        organiz = st.text_input("Organización (si aplica)")
-        region_ac = st.text_input("Región")
-        rol = st.text_input("Rol en la organización (si aplica)")
+    st.info("RED JUVENIL IGNACIANA ESTÁ EN PROCESO DE SELECCIÓN DE ACOMPAÑANTES.")
 
-        st.markdown("#### Información de tu delegación")
-        delegacion = st.text_input("¿A qué delegación acompañas?")
-        total_personas = st.number_input(
-            "¿Cuántas personas componen tu delegación (incluyéndote)?",
-            min_value=1,
-            step=1,
-            value=1,
-        )
-        medio_viaje = st.radio("¿Por qué medio viajan?", ["Por tierra", "Por aire"], horizontal=True)
-        trae_varios = st.radio("¿Traes varios jóvenes además de ti?", ["Sí", "No"], horizontal=True) == "Sí"
-
-        st.markdown("#### Según tus experiencias, cuéntanos tu nivel en cada tipología")
-        st.caption("Mueve las barras del 1 al 100 para ubicarnos en tu nivel de experticia acompañando cada experiencia.")
-        exp_tipos = ["Servicio", "Peregrinaje", "Cultura y arte", "Espiritualidad", "Vocación", "Incidencia política"]
-        niveles_experiencias = {}
-        for exp in exp_tipos:
-            niveles_experiencias[exp] = st.slider(exp, min_value=1, max_value=100, value=50)
-
-        st.markdown("#### Logística Medellín")
-        ciudad_origen = st.text_input("Ciudad de origen del grupo")
-        hora_llegada = st.time_input("¿A qué hora llegará el grupo a Medellín?", value=time(14, 0))
-
-        st.markdown("#### Consentimiento y relación de menores")
-        st.warning("Este documento solo debe diligenciarse para participantes menores de edad.")
-        archivo = st.file_uploader("Sube el archivo (PDF/Excel/Imagen) con la lista firmada de menores", type=["pdf", "xlsx", "xls", "csv", "png", "jpg", "jpeg"])
-        st.caption("Además del archivo, puedes escribir abajo los documentos para validar automáticamente (opcional).")
-        lista_texto = st.text_area("Escribe los documentos de los menores separados por coma (opcional)")
-
-        enviado2 = st.form_submit_button("Guardar acompañante", use_container_width=True)
-        if enviado2:
-            if not doc_ac.strip().isdigit():
-                st.error("El documento del acompañante debe contener solo dígitos.")
-            elif not nom_ac.strip():
-                st.error("El nombre del acompañante es obligatorio.")
-            else:
-                ts = datetime.now().isoformat(timespec="seconds")
-                save_url = ""
-                if archivo is not None:
-                    up = Path("uploads"); up.mkdir(exist_ok=True)
-                    file_path = up / f"{doc_ac.strip()}_{archivo.name}"
-                    with open(file_path, "wb") as f:
-                        f.write(archivo.getbuffer())
-                    save_url = str(file_path)
-
-                niveles_serializados = "; ".join(f"{exp}: {nivel}" for exp, nivel in niveles_experiencias.items())
-
-                row = [
-                    ts,
-                    tipo_doc_ac,
-                    doc_ac.strip(),
-                    nom_ac.strip(),
-                    correo_ac.strip(),
-                    tel_ac.strip(),
-                    organiz.strip(),
-                    region_ac.strip(),
-                    rol.strip(),
-                    delegacion.strip(),
-                    int(total_personas),
-                    medio_viaje,
-                    "TRUE" if trae_varios else "FALSE",
-                    niveles_serializados,
-                    ciudad_origen.strip(),
-                    hora_llegada.strftime("%H:%M"),
-                    save_url,
-                    lista_texto.strip(),
-                ]
-                try:
-                    append_row(EXCEL_PATH, "ACOMPANANTES", row, ACOMPANANTES_COLS)
-                    try:
-                        update_unificado(EXCEL_PATH)
-                    except Exception:
-                        pass
-                    st.success("Acompañante guardado.")
-                except Exception as e:
-                    st.error(f"No se pudo guardar: {e}")
-
-    st.markdown("### Documento para firmar")
-    st.caption("Descarga un formato de autorización en blanco para diligenciar y firmar.")
-    if st.button("Descargar formato de autorización (en blanco)", use_container_width=True):
-        docx = crear_doc_autorizacion_en_blanco("assets/logo.png")
-        bio = io.BytesIO(); docx.save(bio); bio.seek(0)
-        st.download_button(
-            "Descargar ahora",
-            data=bio,
-            file_name="formato_autorizacion_rji.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            use_container_width=True
-        )
+# ================= VOLUNTARIADO =================
+with tab3:
+    st.info("RED JUVENIL IGNACIANA ESTÁ EN PROCESO DE SELECCIÓN DE VOLUNTARIOS.")
 
 st.markdown("</div>", unsafe_allow_html=True)
