@@ -14,7 +14,11 @@ from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # ===== CONFIG =====
-SPREADSHEET_ID = st.secrets.get("SPREADSHEET_ID", "").strip()
+SPREADSHEET_ID = (
+    st.secrets.get("SPREADSHEET_ID")
+    or (st.secrets.get("gspread", {}) or {}).get("spreadsheet_id")
+    or ""
+).strip()
 BANNER_PATH = "assets/ClaveriadaBanner-1920x650.png"
 
 if not SPREADSHEET_ID:
