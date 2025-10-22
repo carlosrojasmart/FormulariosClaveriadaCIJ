@@ -45,6 +45,7 @@ UNIFICADO_COLS = [
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/drive",
 ]
 
 
@@ -175,6 +176,15 @@ def append_row(spreadsheet_id: str, sheet: str, row: list, expected_cols: list):
     ws.append_row(prepared, value_input_option="USER_ENTERED")
 
 
+def _get_service_account_email() -> str:
+    info = st.secrets.get("gcp_service_account")
+    if isinstance(info, dict):
+        email = info.get("client_email")
+        if isinstance(email, str):
+            return email
+    return ""
+
+
 def _record_drive_error(message: str) -> None:
     """Store the last Drive error so the UI can surface troubleshooting info."""
     if not message:
@@ -239,9 +249,21 @@ def upload_file_to_drive(local_path: Path, folder_id: str = "") -> str:
         return ""
 
     if response.status_code not in (200, 201):
-        _record_drive_error(
-            f"Error al subir a Drive (HTTP {response.status_code}): {response.text.strip()}"
-        )
+        error_text = response.text.strip()
+        if response.status_code == 404 and cleaned_folder:
+            service_email = _get_service_account_email()
+            hint = (
+                "No se encontró la carpeta de Drive indicada. "
+                "Verifica que el ID sea correcto, que la carpeta exista y que el service account"
+            )
+            if service_email:
+                hint += f" ({service_email})"
+            hint += " tenga al menos permiso de Editor en esa carpeta o en la unidad compartida."
+            _record_drive_error(hint)
+        else:
+            _record_drive_error(
+                f"Error al subir a Drive (HTTP {response.status_code}): {error_text}"
+            )
         return ""
 
     payload = response.json() if response.content else {}
