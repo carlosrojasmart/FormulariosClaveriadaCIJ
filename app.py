@@ -4,9 +4,11 @@ import copy
 import re
 import unicodedata
 import hashlib
+import time
 from pathlib import Path
 from datetime import datetime, date
 from urllib.parse import urljoin, quote
+from gspread.exceptions import APIError
 from utils import (
     ensure_excel_with_sheets, append_row, update_unificado,
     PARTICIPANTES_COLS, upload_file_to_drive,
@@ -50,8 +52,26 @@ st.set_page_config(
     initial_sidebar_state="collapsed"     # oculta la barra lateral
 )
 
-# Asegura la hoja de cálculo (no visible para usuarios)
-ensure_excel_with_sheets(SPREADSHEET_ID)
+# Asegura la hoja de cálculo (no visible para usuarios) sólo una vez por sesión
+_sheets_flag_key = "_sheets_initialized_for"
+if st.session_state.get(_sheets_flag_key) != SPREADSHEET_ID:
+    last_fail_key = "_sheets_init_last_fail"
+    last_fail_ts = st.session_state.get(last_fail_key, 0.0)
+    if last_fail_ts and (time.time() - float(last_fail_ts)) < 60:
+        st.info("Reintentaremos conectar con la hoja de cálculo en unos segundos…")
+    else:
+        try:
+            ensure_excel_with_sheets(SPREADSHEET_ID)
+        except APIError as exc:  # type: ignore[attr-defined]
+            st.session_state[last_fail_key] = time.time()
+            st.warning(
+                "No se pudo verificar la hoja de cálculo en este momento. "
+                "Intenta nuevamente en unos minutos.\n\n"
+                f"Detalle técnico: {exc}"
+            )
+        else:
+            st.session_state[_sheets_flag_key] = SPREADSHEET_ID
+            st.session_state.pop(last_fail_key, None)
 
 # ===== Estilos (paleta Claveriada + ocultar sidebar) =====
 st.markdown(
