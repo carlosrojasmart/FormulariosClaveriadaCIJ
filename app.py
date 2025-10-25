@@ -817,9 +817,7 @@ with tab1:
                 format_func=lambda val: "Selecciona la región / departamento" if val == "" else val,
             )
 
-            selected_region = st.session_state.get("part_region", "")
-            ciudades_base = COLOMBIA_CIUDADES.get(selected_region) or TODAS_LAS_CIUDADES
-            ciudad_options = [""] + sorted(ciudades_base)
+            ciudad_options = [""] + TODAS_LAS_CIUDADES
             current_ciudad = st.session_state.get("part_ciudad", "")
             if current_ciudad not in ciudad_options:
                 st.session_state.part_ciudad = ""
