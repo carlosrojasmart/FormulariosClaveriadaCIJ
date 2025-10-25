@@ -7,6 +7,7 @@ import hashlib
 import time
 from pathlib import Path
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from urllib.parse import urljoin, quote
 from gspread.exceptions import APIError
 from utils import (
@@ -1127,7 +1128,7 @@ with tab1:
                     doc_a = doc_a_clean
                     nom_a = st.session_state.get("part_nom_a", "")
 
-                    ts = datetime.now().isoformat(timespec="seconds")
+                    ts = datetime.now(ZoneInfo("America/Bogota")).isoformat(timespec="seconds")
                     intereses = st.session_state.get("part_intereses", [])
                     conoce_map = {"Sí": "Si", "No": "No", "Más o menos": "Mas o menos", "": ""}
                     acomp_items = []
