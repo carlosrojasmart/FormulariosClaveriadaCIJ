@@ -385,3 +385,47 @@ def update_unificado(spreadsheet_id: str) -> int:
     ws_unificado = _ensure_worksheet(sh, "UNIFICADO", UNIFICADO_COLS)
     _write_dataframe_to_worksheet(ws_unificado, out)
     return len(out_rows)
+
+
+def subir_y_guardar_enlace(
+    spreadsheet_id: str,
+    sheet: str,
+    columna_objetivo: str,
+    clave_busqueda_col: str,
+    clave_busqueda_val: str,
+    local_path: str,
+    folder_id: str = "",
+) -> str:
+    url = upload_file_to_drive(Path(local_path), folder_id=folder_id)
+    if not url:
+        raise RuntimeError(
+            "No se pudo subir a Drive (revisa _drive_last_error en session_state)."
+        )
+
+    sh = _get_spreadsheet(spreadsheet_id)
+    if sheet == "PARTICIPANTES":
+        expected_cols = PARTICIPANTES_COLS
+    elif sheet == "ACOMPANANTES":
+        expected_cols = ACOMPANANTES_COLS
+    else:
+        expected_cols = UNIFICADO_COLS
+
+    df = get_sheet_as_dataframe(spreadsheet_id, sheet, expected_cols)
+
+    if columna_objetivo not in df.columns:
+        df[columna_objetivo] = ""
+
+    mask = df[clave_busqueda_col].astype(str).str.replace(r"\s+", "", regex=True).eq(
+        str(clave_busqueda_val).replace(" ", "")
+    )
+    if not mask.any():
+        raise RuntimeError(
+            f"No se encontró la fila en {sheet} con {clave_busqueda_col}={clave_busqueda_val}"
+        )
+
+    df.loc[mask, columna_objetivo] = url
+
+    ws = _ensure_worksheet(sh, sheet, list(df.columns))
+    _write_dataframe_to_worksheet(ws, df)
+
+    return url
