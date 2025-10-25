@@ -7,6 +7,7 @@ import hashlib
 import time
 from pathlib import Path
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from urllib.parse import urljoin, quote
 from gspread.exceptions import APIError
 from utils import (
@@ -702,6 +703,9 @@ def _validate_participant_stage3(show_errors: bool = True) -> bool:
     if not st.session_state.get("part_acepta_datos"):
         errors.append("Debes aceptar el aviso de privacidad.")
 
+    if not st.session_state.get("part_acepta_whatsapp"):
+        errors.append("Debes autorizar la comunicación por WhatsApp.")
+
     return _emit_stage_errors(errors, show_errors)
 
 
@@ -816,9 +820,7 @@ with tab1:
                 format_func=lambda val: "Selecciona la región / departamento" if val == "" else val,
             )
 
-            selected_region = st.session_state.get("part_region", "")
-            ciudades_base = COLOMBIA_CIUDADES.get(selected_region) or TODAS_LAS_CIUDADES
-            ciudad_options = [""] + sorted(ciudades_base)
+            ciudad_options = [""] + TODAS_LAS_CIUDADES
             current_ciudad = st.session_state.get("part_ciudad", "")
             if current_ciudad not in ciudad_options:
                 st.session_state.part_ciudad = ""
@@ -1127,7 +1129,7 @@ with tab1:
                     doc_a = doc_a_clean
                     nom_a = st.session_state.get("part_nom_a", "")
 
-                    ts = datetime.now().isoformat(timespec="seconds")
+                    ts = datetime.now(ZoneInfo("America/Bogota")).isoformat(timespec="seconds")
                     intereses = st.session_state.get("part_intereses", [])
                     conoce_map = {"Sí": "Si", "No": "No", "Más o menos": "Mas o menos", "": ""}
                     acomp_items = []
