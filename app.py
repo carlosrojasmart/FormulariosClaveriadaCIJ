@@ -703,6 +703,9 @@ def _validate_participant_stage3(show_errors: bool = True) -> bool:
     if not st.session_state.get("part_acepta_datos"):
         errors.append("Debes aceptar el aviso de privacidad.")
 
+    if not st.session_state.get("part_acepta_whatsapp"):
+        errors.append("Debes autorizar la comunicación por WhatsApp.")
+
     return _emit_stage_errors(errors, show_errors)
 
 
