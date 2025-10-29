@@ -414,6 +414,9 @@ PARTICIPANT_DEFAULTS = {
     "part_obra_select": "",
     "part_obra_custom": "",
     "part_proceso": "",
+    "part_tipo_doc_a": "",
+    "part_doc_a": "",
+    "_clean_part_doc_a": "",
     "part_nom_a": "",
     "part_ape_a": "",
     "part_correo_a": "",
@@ -472,6 +475,13 @@ def _reset_participant_state():
         "part_contact_doc_bytes",
         "_contact_doc_drive_hash",
         "_contact_doc_drive_link",
+    ):
+        st.session_state.pop(legacy_key, None)
+
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
     ):
         st.session_state.pop(legacy_key, None)
 
@@ -1086,6 +1096,12 @@ with tab1:
                         doc_p_clean = normalized if doc_ok else st.session_state.get("part_doc_p", "").strip()
                     doc_p = doc_p_clean
 
+                    doc_a_clean = st.session_state.get("_clean_part_doc_a", "").strip()
+                    if not doc_a_clean:
+                        doc_a_ok, normalized_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
+                        doc_a_clean = normalized_a if doc_a_ok else st.session_state.get("part_doc_a", "").strip()
+                    doc_a = doc_a_clean
+
                     nom_a = st.session_state.get("part_nom_a", "")
 
                     ts = datetime.now(ZoneInfo("America/Bogota")).isoformat(timespec="seconds")
@@ -1133,6 +1149,11 @@ with tab1:
                     if st.session_state.get("part_tipo_doc_p") or not payload.get("tipo_documento_participante"):
                         payload["tipo_documento_participante"] = st.session_state.get("part_tipo_doc_p", "")
                     payload["es_mayor_edad"] = es_mayor
+
+                    if doc_a or "documento_contacto" not in payload:
+                        payload["documento_contacto"] = doc_a
+                    if st.session_state.get("part_tipo_doc_a") or not payload.get("tipo_documento_contacto"):
+                        payload["tipo_documento_contacto"] = st.session_state.get("part_tipo_doc_a", "")
 
                     uploads_dir = Path("uploads")
                     participante_doc_url = payload.get("archivo_doc_participante", "")
