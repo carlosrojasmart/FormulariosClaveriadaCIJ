@@ -499,6 +499,13 @@ def _reset_participant_state():
     ):
         st.session_state.pop(legacy_key, None)
 
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
+    ):
+        st.session_state.pop(legacy_key, None)
+
     st.session_state.pop("_participant_payload", None)
     st.session_state.pop("_participant_reset_pending", None)
 
@@ -1285,6 +1292,20 @@ with tab1:
                         allow_empty=True,
                     )
 
+                    tipo_doc_contacto_clean = _capture_field(
+                        "tipo_documento_contacto",
+                        st.session_state.get("part_tipo_doc_a", ""),
+                        allow_empty=True,
+                    )
+                    doc_contacto_clean = _capture_field(
+                        "documento_contacto",
+                        st.session_state.get("part_doc_a", ""),
+                        sanitizer=lambda raw: (
+                            doc_a or _clean_string(raw)
+                        ),
+                        allow_empty=True,
+                    )
+
                     nom_a_clean = _capture_field("nombres_contacto", nom_a)
                     ape_a_clean = _capture_field("apellidos_contacto", st.session_state.get("part_ape_a", ""))
                     tel_a_clean = _capture_field(
@@ -1393,8 +1414,8 @@ with tab1:
                         "TRUE" if payload.get("acompanamiento_red_comunitaria") else "FALSE",
                         "TRUE" if payload.get("acompanamiento_ninguna") else "FALSE",
                         payload.get("conoce_rji", conoce_value),
-                        payload.get("tipo_documento_contacto", tipo_doc_contacto_val),
-                        payload.get("documento_contacto", doc_a),
+                        tipo_doc_contacto_clean,
+                        doc_contacto_clean,
                         nom_a_clean,
                         ape_a_clean,
                         tel_a_sheet,
