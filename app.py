@@ -603,8 +603,21 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
         st.session_state["_clean_part_doc_p"] = ""
         errors.append("El documento del participante debe contener solo dígitos.")
 
+    doc_contact_ok, cleaned_doc_contact = _normalize_numeric_input(
+        st.session_state.get("part_doc_a", "")
+    )
+    if doc_contact_ok:
+        st.session_state["_clean_part_doc_a"] = cleaned_doc_contact
+    else:
+        st.session_state["_clean_part_doc_a"] = ""
+        errors.append("El documento del contacto debe contener solo dígitos.")
+
     if not st.session_state.get("part_tipo_doc_p"):
         errors.append("Selecciona el tipo de documento del participante.")
+
+    tipo_doc_contacto_val = _clean_string(st.session_state.get("part_tipo_doc_a", ""))
+    if not tipo_doc_contacto_val:
+        errors.append("Selecciona el tipo de documento del contacto.")
 
     if not st.session_state.get("part_nombres", "").strip() or not st.session_state.get("part_apellidos", "").strip():
         errors.append("Ingresa tus nombres y apellidos tal como aparecen en tu documento.")
@@ -672,8 +685,12 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
                 "salud_mental": _clean_string(st.session_state.get("part_salud_mental", "")),
                 "obra_institucion": _clean_string(st.session_state.get("part_obra", "")),
                 "proceso_juvenil": _clean_string(st.session_state.get("part_proceso", "")),
-                "tipo_documento_contacto": "",
-                "documento_contacto": "",
+                "tipo_documento_contacto": tipo_doc_contacto_val,
+                "documento_contacto": (
+                    cleaned_doc_contact
+                    if doc_contact_ok
+                    else _clean_string(st.session_state.get("part_doc_a", ""))
+                ),
                 "nombres_contacto": _clean_string(nom_a),
                 "apellidos_contacto": _clean_string(ape_a),
                 "telefono_contacto": tel_a_clean,
