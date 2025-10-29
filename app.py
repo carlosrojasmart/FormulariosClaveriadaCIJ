@@ -460,13 +460,44 @@ def _reset_participant_state():
         "part_exp_order",
         "exp_sort",
         "part_doc_archivo",
-        "part_contact_doc",
         "_part_doc_drive_hash",
         "_part_doc_drive_link",
+    ):
+        st.session_state.pop(transient_key, None)
+
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_tipo_doc_a",
+        "part_doc_a",
+        "_clean_part_doc_a",
+        "part_contact_doc",
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
         "_contact_doc_drive_hash",
         "_contact_doc_drive_link",
     ):
-        st.session_state.pop(transient_key, None)
+        st.session_state.pop(legacy_key, None)
+
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
+    ):
+        st.session_state.pop(legacy_key, None)
+
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
+    ):
+        st.session_state.pop(legacy_key, None)
+
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
+    ):
+        st.session_state.pop(legacy_key, None)
 
     # Remove legacy keys from sesiones previas.
     for legacy_key in (
@@ -486,7 +517,7 @@ def _participant_stage_fields(stage: int):
             "part_apellidos", "part_apodo", "part_tel", "part_correo", "part_direccion",
             "part_region", "part_ciudad", "part_fecha_nac", "part_talla", "part_eps",
             "part_rest_alim", "part_salud_mental", "part_obra", "part_proceso",
-            "part_tipo_doc_a", "part_doc_a", "part_nom_a", "part_ape_a", "part_parentesco_a", "part_tel_a",
+            "part_nom_a", "part_ape_a", "part_parentesco_a", "part_tel_a",
         ],
         2: [
             "part_exp_sig", "part_intereses", "part_dato_freak", "part_pregunta",
@@ -594,30 +625,16 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
     if not st.session_state.get("part_correo", "").strip():
         errors.append("Incluye un correo de contacto personal.")
 
-    doc_a_ok, cleaned_doc_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
-    tipo_doc_a = st.session_state.get("part_tipo_doc_a", "")
     nom_a = st.session_state.get("part_nom_a", "").strip()
     ape_a = st.session_state.get("part_ape_a", "").strip()
     tel_a_clean = _clean_phone_number(st.session_state.get("part_tel_a", ""))
     parentesco = st.session_state.get("part_parentesco_a", "")
 
-    contacto_doc_issue = not tipo_doc_a or not doc_a_ok
     contacto_name_issue = not nom_a or not ape_a
     es_menor = mayor_option == "No"
-    menores_reportado = False
-    if es_menor and (contacto_doc_issue or contacto_name_issue):
-        errors.append("Para menores, el documento y nombre del acudiente son obligatorios (solo dígitos en el documento).")
-        menores_reportado = True
-
-    if contacto_doc_issue and not menores_reportado:
-        errors.append("El contacto debe tener tipo de documento y un número válido (solo dígitos).")
-
-    if contacto_doc_issue:
-        st.session_state["_clean_part_doc_a"] = ""
-    else:
-        st.session_state["_clean_part_doc_a"] = cleaned_doc_a
-
-    if contacto_name_issue and not menores_reportado:
+    if es_menor and contacto_name_issue:
+        errors.append("Para menores, los nombres y apellidos del acudiente son obligatorios.")
+    elif contacto_name_issue:
         errors.append("Ingresa nombres y apellidos del contacto de emergencia.")
 
     if not tel_a_clean:
@@ -655,8 +672,8 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
                 "salud_mental": _clean_string(st.session_state.get("part_salud_mental", "")),
                 "obra_institucion": _clean_string(st.session_state.get("part_obra", "")),
                 "proceso_juvenil": _clean_string(st.session_state.get("part_proceso", "")),
-                "tipo_documento_contacto": st.session_state.get("part_tipo_doc_a", ""),
-                "documento_contacto": cleaned_doc_a if doc_a_ok else _clean_string(st.session_state.get("part_doc_a", "")),
+                "tipo_documento_contacto": "",
+                "documento_contacto": "",
                 "nombres_contacto": _clean_string(nom_a),
                 "apellidos_contacto": _clean_string(ape_a),
                 "telefono_contacto": tel_a_clean,
