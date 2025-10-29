@@ -492,6 +492,13 @@ def _reset_participant_state():
     ):
         st.session_state.pop(legacy_key, None)
 
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
+    ):
+        st.session_state.pop(legacy_key, None)
+
     st.session_state.pop("_participant_payload", None)
     st.session_state.pop("_participant_reset_pending", None)
 
@@ -1122,8 +1129,11 @@ with tab1:
                     doc_a_clean = st.session_state.get("_clean_part_doc_a", "").strip()
                     if not doc_a_clean:
                         doc_a_ok, normalized_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
-                        doc_a_clean = normalized_a if doc_a_ok else st.session_state.get("part_doc_a", "").strip()
+                        fallback_doc = st.session_state.get("part_doc_a", "")
+                        doc_a_clean = normalized_a if doc_a_ok else _clean_string(fallback_doc)
                     doc_a = doc_a_clean
+
+                    tipo_doc_contacto_val = _clean_string(st.session_state.get("part_tipo_doc_a", ""))
 
                     nom_a = st.session_state.get("part_nom_a", "")
 
@@ -1175,8 +1185,8 @@ with tab1:
 
                     if doc_a or "documento_contacto" not in payload:
                         payload["documento_contacto"] = doc_a
-                    if st.session_state.get("part_tipo_doc_a") or not payload.get("tipo_documento_contacto"):
-                        payload["tipo_documento_contacto"] = st.session_state.get("part_tipo_doc_a", "")
+                    if tipo_doc_contacto_val or "tipo_documento_contacto" not in payload:
+                        payload["tipo_documento_contacto"] = tipo_doc_contacto_val
 
                     uploads_dir = Path("uploads")
                     participante_doc_url = payload.get("archivo_doc_participante", "")
@@ -1383,8 +1393,8 @@ with tab1:
                         "TRUE" if payload.get("acompanamiento_red_comunitaria") else "FALSE",
                         "TRUE" if payload.get("acompanamiento_ninguna") else "FALSE",
                         payload.get("conoce_rji", conoce_value),
-                        payload.get("tipo_documento_contacto", ""),
-                        payload.get("documento_contacto", ""),
+                        payload.get("tipo_documento_contacto", tipo_doc_contacto_val),
+                        payload.get("documento_contacto", doc_a),
                         nom_a_clean,
                         ape_a_clean,
                         tel_a_sheet,
