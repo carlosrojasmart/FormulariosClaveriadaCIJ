@@ -414,11 +414,6 @@ PARTICIPANT_DEFAULTS = {
     "part_obra_select": "",
     "part_obra_custom": "",
     "part_proceso": "",
-    "part_tipo_doc_a": "",
-    "part_doc_a": "",
-    "_clean_part_doc_a": "",
-    "part_contact_doc_name": "",
-    "part_contact_doc_bytes": b"",
     "part_nom_a": "",
     "part_ape_a": "",
     "part_correo_a": "",
@@ -462,13 +457,23 @@ def _reset_participant_state():
         "part_exp_order",
         "exp_sort",
         "part_doc_archivo",
-        "part_contact_doc",
         "_part_doc_drive_hash",
         "_part_doc_drive_link",
+    ):
+        st.session_state.pop(transient_key, None)
+
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_tipo_doc_a",
+        "part_doc_a",
+        "_clean_part_doc_a",
+        "part_contact_doc",
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
         "_contact_doc_drive_hash",
         "_contact_doc_drive_link",
     ):
-        st.session_state.pop(transient_key, None)
+        st.session_state.pop(legacy_key, None)
 
     st.session_state.pop("_participant_payload", None)
     st.session_state.pop("_participant_reset_pending", None)
@@ -481,7 +486,7 @@ def _participant_stage_fields(stage: int):
             "part_apellidos", "part_apodo", "part_tel", "part_correo", "part_direccion",
             "part_region", "part_ciudad", "part_fecha_nac", "part_talla", "part_eps",
             "part_rest_alim", "part_salud_mental", "part_obra", "part_proceso",
-            "part_tipo_doc_a", "part_doc_a", "part_nom_a", "part_ape_a", "part_parentesco_a", "part_tel_a",
+            "part_nom_a", "part_ape_a", "part_parentesco_a", "part_tel_a",
         ],
         2: [
             "part_exp_sig", "part_intereses", "part_dato_freak", "part_pregunta",
@@ -589,30 +594,16 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
     if not st.session_state.get("part_correo", "").strip():
         errors.append("Incluye un correo de contacto personal.")
 
-    doc_a_ok, cleaned_doc_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
-    tipo_doc_a = st.session_state.get("part_tipo_doc_a", "")
     nom_a = st.session_state.get("part_nom_a", "").strip()
     ape_a = st.session_state.get("part_ape_a", "").strip()
     tel_a_clean = _clean_phone_number(st.session_state.get("part_tel_a", ""))
     parentesco = st.session_state.get("part_parentesco_a", "")
 
-    contacto_doc_issue = not tipo_doc_a or not doc_a_ok
     contacto_name_issue = not nom_a or not ape_a
     es_menor = mayor_option == "No"
-    menores_reportado = False
-    if es_menor and (contacto_doc_issue or contacto_name_issue):
-        errors.append("Para menores, el documento y nombre del acudiente son obligatorios (solo dígitos en el documento).")
-        menores_reportado = True
-
-    if contacto_doc_issue and not menores_reportado:
-        errors.append("El contacto debe tener tipo de documento y un número válido (solo dígitos).")
-
-    if contacto_doc_issue:
-        st.session_state["_clean_part_doc_a"] = ""
-    else:
-        st.session_state["_clean_part_doc_a"] = cleaned_doc_a
-
-    if contacto_name_issue and not menores_reportado:
+    if es_menor and contacto_name_issue:
+        errors.append("Para menores, los nombres y apellidos del acudiente son obligatorios.")
+    elif contacto_name_issue:
         errors.append("Ingresa nombres y apellidos del contacto de emergencia.")
 
     if not tel_a_clean:
@@ -650,8 +641,8 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
                 "salud_mental": _clean_string(st.session_state.get("part_salud_mental", "")),
                 "obra_institucion": _clean_string(st.session_state.get("part_obra", "")),
                 "proceso_juvenil": _clean_string(st.session_state.get("part_proceso", "")),
-                "tipo_documento_contacto": st.session_state.get("part_tipo_doc_a", ""),
-                "documento_contacto": cleaned_doc_a if doc_a_ok else _clean_string(st.session_state.get("part_doc_a", "")),
+                "tipo_documento_contacto": "",
+                "documento_contacto": "",
                 "nombres_contacto": _clean_string(nom_a),
                 "apellidos_contacto": _clean_string(ape_a),
                 "telefono_contacto": tel_a_clean,
@@ -889,22 +880,6 @@ with tab1:
 
             st.subheader("Contacto de emergencia / acudiente")
             st.caption("Incluye la persona que estará disponible ante cualquier emergencia.")
-            doc_ac_options = ["", "CC", "CE", "Pasaporte", "Otro"]
-            current_doc_a = st.session_state.get("part_tipo_doc_a", "")
-            if current_doc_a not in doc_ac_options:
-                st.session_state.part_tipo_doc_a = ""
-            st.selectbox(
-                "Tipo de documento (contacto)",
-                doc_ac_options,
-                key="part_tipo_doc_a",
-                format_func=lambda val: "Selecciona el documento" if val == "" else val,
-            )
-            st.text_input(
-                "Documento del contacto (solo dígitos)",
-                max_chars=20,
-                placeholder="Ej: 1012345678",
-                key="part_doc_a"
-            )
             st.text_input("Nombres del contacto", key="part_nom_a")
             st.text_input("Apellidos del contacto", key="part_ape_a")
             st.text_input("Teléfono del contacto", key="part_tel_a")
@@ -919,17 +894,6 @@ with tab1:
                 key="part_parentesco_a",
                 format_func=lambda val: "Selecciona el parentesco" if val == "" else val,
             )
-            contacto_file = st.file_uploader(
-                "Adjunta el documento del contacto (PDF o imagen)",
-                type=["pdf", "png", "jpg", "jpeg"],
-                key="part_contact_doc",
-            )
-            if contacto_file is not None:
-                st.session_state.part_contact_doc_name = contacto_file.name
-                st.session_state.part_contact_doc_bytes = contacto_file.getbuffer().tobytes()
-            elif st.session_state.get("part_contact_doc_name"):
-                st.caption(f"Archivo guardado: {st.session_state.get('part_contact_doc_name')}")
-
             avanzar = st.form_submit_button("Avanzar a intereses", use_container_width=True)
             if avanzar:
                 if _validate_participant_stage1():
@@ -1122,11 +1086,6 @@ with tab1:
                         doc_p_clean = normalized if doc_ok else st.session_state.get("part_doc_p", "").strip()
                     doc_p = doc_p_clean
 
-                    doc_a_clean = st.session_state.get("_clean_part_doc_a", "").strip()
-                    if not doc_a_clean:
-                        doc_a_ok, normalized_a = _normalize_numeric_input(st.session_state.get("part_doc_a", ""))
-                        doc_a_clean = normalized_a if doc_a_ok else st.session_state.get("part_doc_a", "").strip()
-                    doc_a = doc_a_clean
                     nom_a = st.session_state.get("part_nom_a", "")
 
                     ts = datetime.now(ZoneInfo("America/Bogota")).isoformat(timespec="seconds")
@@ -1171,21 +1130,14 @@ with tab1:
 
                     if doc_p:
                         payload["documento_participante"] = doc_p
-                    if doc_a:
-                        payload["documento_contacto"] = doc_a
                     if st.session_state.get("part_tipo_doc_p") or not payload.get("tipo_documento_participante"):
                         payload["tipo_documento_participante"] = st.session_state.get("part_tipo_doc_p", "")
-                    if st.session_state.get("part_tipo_doc_a") or not payload.get("tipo_documento_contacto"):
-                        payload["tipo_documento_contacto"] = st.session_state.get("part_tipo_doc_a", "")
                     payload["es_mayor_edad"] = es_mayor
 
                     uploads_dir = Path("uploads")
                     participante_doc_url = payload.get("archivo_doc_participante", "")
-                    contacto_doc_url = payload.get("archivo_doc_contacto", "")
                     participante_label = payload.get("archivo_doc_participante_label", "")
-                    contacto_label = payload.get("archivo_doc_contacto_label", "")
                     participant_drive_failed = False
-                    contact_drive_failed = False
 
                     if st.session_state.get("part_doc_id_bytes") and st.session_state.get("part_doc_id_name"):
                         uploads_dir.mkdir(exist_ok=True)
@@ -1215,33 +1167,6 @@ with tab1:
                             if UPLOADS_DRIVE_FOLDER_ID:
                                 participant_drive_failed = True
 
-                    if st.session_state.get("part_contact_doc_bytes") and st.session_state.get("part_contact_doc_name"):
-                        uploads_dir.mkdir(exist_ok=True)
-                        contacto_filename = f"{doc_a}_{st.session_state['part_contact_doc_name']}"
-                        contacto_path = uploads_dir / contacto_filename
-                        with open(contacto_path, "wb") as f:
-                            f.write(st.session_state["part_contact_doc_bytes"])
-                        contacto_label = contacto_path.name
-                        drive_link = ""
-                        contact_hasher = hashlib.sha256()
-                        contact_hasher.update(st.session_state["part_contact_doc_bytes"])
-                        contact_hasher.update(f"|{UPLOADS_DRIVE_FOLDER_ID}".encode("utf-8"))
-                        contact_hash = contact_hasher.hexdigest()
-                        cached_hash = st.session_state.get("_contact_doc_drive_hash")
-                        cached_link = st.session_state.get("_contact_doc_drive_link")
-                        if cached_hash == contact_hash and cached_link:
-                            drive_link = cached_link
-                        else:
-                            drive_link = upload_file_to_drive(contacto_path, UPLOADS_DRIVE_FOLDER_ID)
-                            if drive_link:
-                                st.session_state["_contact_doc_drive_hash"] = contact_hash
-                                st.session_state["_contact_doc_drive_link"] = drive_link
-                        if drive_link:
-                            contacto_doc_url = drive_link
-                        else:
-                            contacto_doc_url = str(contacto_path)
-                            if UPLOADS_DRIVE_FOLDER_ID:
-                                contact_drive_failed = True
 
                     nombres_val = _capture_field("nombres", st.session_state.get("part_nombres", ""))
                     apellidos_val = _capture_field("apellidos", st.session_state.get("part_apellidos", ""))
@@ -1355,15 +1280,6 @@ with tab1:
                         payload["archivo_doc_participante_label"] = participante_label
                     elif "archivo_doc_participante_label" not in payload:
                         payload["archivo_doc_participante_label"] = ""
-                    if contacto_doc_url:
-                        payload["archivo_doc_contacto"] = contacto_doc_url
-                    elif "archivo_doc_contacto" not in payload:
-                        payload["archivo_doc_contacto"] = ""
-                    if contacto_label:
-                        payload["archivo_doc_contacto_label"] = contacto_label
-                    elif "archivo_doc_contacto_label" not in payload:
-                        payload["archivo_doc_contacto_label"] = ""
-
                     full_name = f"{nombres_val} {apellidos_val}".strip()
                     edad_aprox = calcular_edad(payload.get("fecha_nacimiento"))
                     intereses_text = ", ".join(intereses_payload or [])
@@ -1371,13 +1287,8 @@ with tab1:
                         payload.get("archivo_doc_participante", participante_doc_url),
                         payload.get("archivo_doc_participante_label", participante_label),
                     )
-                    contacto_doc_cell = _format_upload_for_sheet(
-                        payload.get("archivo_doc_contacto", contacto_doc_url),
-                        payload.get("archivo_doc_contacto_label", contacto_label),
-                    )
-
                     drive_error_message = st.session_state.get("_drive_last_error", "").strip()
-                    if drive_error_message and (participant_drive_failed or contact_drive_failed):
+                    if drive_error_message and participant_drive_failed:
                         st.warning(
                             "No se pudo publicar uno o más archivos en Drive. Se guardó la ruta local por ahora. "
                             "Mensaje técnico: " + drive_error_message
@@ -1429,14 +1340,13 @@ with tab1:
                         "TRUE" if payload.get("acompanamiento_ninguna") else "FALSE",
                         payload.get("conoce_rji", conoce_value),
                         payload.get("tipo_documento_contacto", ""),
-                        payload.get("documento_contacto", doc_a),
+                        payload.get("documento_contacto", ""),
                         nom_a_clean,
                         ape_a_clean,
                         tel_a_sheet,
                         correo_a_clean,
                         parentesco_clean,
                         participante_doc_cell,
-                        contacto_doc_cell,
                         "TRUE" if acepta_datos else "FALSE",
                         "TRUE" if acepta_whatsapp else "FALSE",
                     ]
