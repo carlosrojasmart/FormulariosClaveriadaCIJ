@@ -485,6 +485,13 @@ def _reset_participant_state():
     ):
         st.session_state.pop(legacy_key, None)
 
+    # Remove legacy keys from sesiones previas.
+    for legacy_key in (
+        "part_contact_doc_name",
+        "part_contact_doc_bytes",
+    ):
+        st.session_state.pop(legacy_key, None)
+
     st.session_state.pop("_participant_payload", None)
     st.session_state.pop("_participant_reset_pending", None)
 
@@ -890,8 +897,24 @@ with tab1:
 
             st.subheader("Contacto de emergencia / acudiente")
             st.caption("Incluye la persona que estará disponible ante cualquier emergencia.")
+            doc_ac_options = ["", "CC", "CE", "Pasaporte", "Otro"]
+            current_doc_a = st.session_state.get("part_tipo_doc_a", "")
+            if current_doc_a not in doc_ac_options:
+                st.session_state.part_tipo_doc_a = ""
             st.text_input("Nombres del contacto", key="part_nom_a")
             st.text_input("Apellidos del contacto", key="part_ape_a")
+            st.selectbox(
+                "Tipo de documento (contacto)",
+                doc_ac_options,
+                key="part_tipo_doc_a",
+                format_func=lambda val: "Selecciona el documento" if val == "" else val,
+            )
+            st.text_input(
+                "Documento del contacto (solo dígitos)",
+                max_chars=20,
+                placeholder="Ej: 1012345678",
+                key="part_doc_a"
+            )
             st.text_input("Teléfono del contacto", key="part_tel_a")
             st.text_input("Correo del contacto (opcional)", key="part_correo_a")
             parentesco_opciones = [""] + PARENTESCOS
