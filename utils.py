@@ -24,7 +24,7 @@ PARTICIPANTES_COLS = [
     "acompanamientos_marcados","acompanamiento_familia","acompanamiento_amigos","acompanamiento_escucha_activa",
     "acompanamiento_mentoria","acompanamiento_espiritual","acompanamiento_red_comunitaria","acompanamiento_ninguna",
     "conoce_rji","tipo_documento_contacto","documento_contacto","nombres_contacto","apellidos_contacto","telefono_contacto",
-    "correo_contacto","parentesco_contacto","archivo_doc_participante","archivo_doc_contacto",
+    "correo_contacto","parentesco_contacto","archivo_doc_participante",
     "acepta_tratamiento_datos","acepta_whatsapp"
 ]
 

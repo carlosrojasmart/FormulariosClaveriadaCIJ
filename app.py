@@ -643,8 +643,6 @@ def _validate_participant_stage1(show_errors: bool = True) -> bool:
                 "proceso_juvenil": _clean_string(st.session_state.get("part_proceso", "")),
                 "tipo_documento_contacto": "",
                 "documento_contacto": "",
-                "archivo_doc_contacto": "",
-                "archivo_doc_contacto_label": "",
                 "nombres_contacto": _clean_string(nom_a),
                 "apellidos_contacto": _clean_string(ape_a),
                 "telefono_contacto": tel_a_clean,
@@ -1349,7 +1347,6 @@ with tab1:
                         correo_a_clean,
                         parentesco_clean,
                         participante_doc_cell,
-                        "",
                         "TRUE" if acepta_datos else "FALSE",
                         "TRUE" if acepta_whatsapp else "FALSE",
                     ]
