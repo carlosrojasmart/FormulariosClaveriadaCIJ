@@ -13,13 +13,26 @@ from gspread.exceptions import WorksheetNotFound
 from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import AuthorizedSession
 
+EXPERIENCIAS_PARTICIPANTE = [
+    ("Misión de servicio", "exp_mision_servicio_rank"),
+    ("Peregrinar con sentido", "exp_peregrinar_sentido_rank"),
+    ("Incidencia política ignaciana", "exp_incidencia_politica_ignaciana_rank"),
+    ("Espiritualidad y vida interior", "exp_espiritualidad_vida_interior_rank"),
+    ("Curiosidad a la vida religiosa", "exp_curiosidad_vida_religiosa_rank"),
+    ("Arte, cultura y comunicación", "exp_arte_cultura_comunicacion_rank"),
+    ("Reconciliación ecológica", "exp_reconciliacion_ecologica_rank"),
+]
+
+EXPERIENCIAS_PARTICIPANTE_LABELS = tuple(label for label, _ in EXPERIENCIAS_PARTICIPANTE)
+EXPERIENCIAS_PARTICIPANTE_COLUMNS = tuple(column for _, column in EXPERIENCIAS_PARTICIPANTE)
+
 PARTICIPANTES_COLS = [
     "timestamp","es_mayor_edad","tipo_documento_participante","documento_participante","nombres","apellidos",
     "nombre_completo","como_te_gusta_que_te_digan","telefono_celular","correo","direccion","region","ciudad",
     "fecha_nacimiento","edad_aprox","talla_camisa","eps","restricciones_alimentarias","salud_mental",
     "obra_institucion","proceso_juvenil","intereses_personales","experiencia_significativa",
     "hobby_o_dato_curioso","pregunta_para_conectar",
-    "exp_servicio_rank","exp_peregrinaje_rank","exp_cultura_arte_rank","exp_espiritualidad_rank","exp_vocacion_rank","exp_incidencia_politica_rank",
+    *EXPERIENCIAS_PARTICIPANTE_COLUMNS,
     "experiencia_top_calculada","nivel_experticie","motivo_experiencia_top","preguntas_frecuentes",
     "acompanamientos_marcados","acompanamiento_familia","acompanamiento_amigos","acompanamiento_escucha_activa",
     "acompanamiento_mentoria","acompanamiento_espiritual","acompanamiento_red_comunitaria","acompanamiento_ninguna",

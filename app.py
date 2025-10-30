@@ -13,6 +13,7 @@ from gspread.exceptions import APIError
 from utils import (
     ensure_excel_with_sheets, append_row, update_unificado,
     PARTICIPANTES_COLS, upload_file_to_drive,
+    EXPERIENCIAS_PARTICIPANTE,
 )
 
 # Word para el documento de autorización en blanco
@@ -793,7 +794,7 @@ with tab1:
     st.markdown(f"### {stage_titles.get(stage, '')}")
     st.markdown(f"<div class='motivacion-box'>{motivaciones.get(stage, '')}</div>", unsafe_allow_html=True)
 
-    experiencias = ["Misión de servicio", "Peregrinar con sentido", "Incidencia política ignaciana", "Espiritualidad y vida interior", "Curiosidad a la vida religiosa", "Arte, cultura y comunicación", "Reconciliación ecológica"]
+    experiencias = [label for label, _ in EXPERIENCIAS_PARTICIPANTE]
 
     ACOMP_KEYS = [
         "part_acomp_familia",
@@ -1386,6 +1387,13 @@ with tab1:
                             "Mensaje técnico: " + drive_error_message
                         )
 
+                    experiencia_rank_values = [
+                        int(ranks[label]) if label in ranks else 0
+                        for label, _ in EXPERIENCIAS_PARTICIPANTE
+                    ]
+                    for (label, column_key), rank_value in zip(EXPERIENCIAS_PARTICIPANTE, experiencia_rank_values):
+                        payload[column_key] = rank_value
+
                     row = [
                         ts,
                         "TRUE" if es_mayor else "FALSE",
@@ -1412,12 +1420,7 @@ with tab1:
                         exp_sig_val,
                         dato_freak_val,
                         pregunta_val,
-                        int(ranks["Servicio"]),
-                        int(ranks["Peregrinaje"]),
-                        int(ranks["Cultura y arte"]),
-                        int(ranks["Espiritualidad"]),
-                        int(ranks["Vocación"]),
-                        int(ranks["Incidencia política"]),
+                        *experiencia_rank_values,
                         experiencia_top,
                         perfil_cerc,
                         motivo_val,
