@@ -793,7 +793,7 @@ with tab1:
     st.markdown(f"### {stage_titles.get(stage, '')}")
     st.markdown(f"<div class='motivacion-box'>{motivaciones.get(stage, '')}</div>", unsafe_allow_html=True)
 
-    experiencias = ["Servicio", "Peregrinaje", "Cultura y arte", "Espiritualidad", "Vocación", "Incidencia política"]
+    experiencias = ["Misión de servicio", "Peregrinar con sentido", "Incidencia política ignaciana", "Espiritualidad y vida interior", "Curiosidad a la vida religiosa", "Arte, cultura y comunicación", "Reconciliación ecológica"]
 
     ACOMP_KEYS = [
         "part_acomp_familia",
